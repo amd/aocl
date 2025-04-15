@@ -171,7 +171,7 @@ configure the build options, and build the unified binary.
 Clone the repository:
 
 ``` console
-$ git clone https://github.com/AMD-AOCL/aocl.git
+$ git clone https://github.com/amd/aocl.git
 $ cd aocl
 ```
 
@@ -991,6 +991,3 @@ available configuration(s) to `CMAKE_BUILD_TYPE`. To build Debug, set
   ```bat
   cmake -S . -B build -G "Visual Studio 17 2022" -T ClangCl -DCMAKE_BUILD_TYPE=Debug
   cmake --build build --config Debug
-  ```
-
-
