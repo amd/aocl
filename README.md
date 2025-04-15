@@ -151,7 +151,9 @@ sure this directory includes the `include` and `lib` folders. Within the
 `lib` folder, ensure that the `libcrypto.lib` and `libssl.lib` libraries
 are present.
 
-For more information on validated versions of compiler/LLVM, CMake, Python, OpenSSL, and Boost libraries refer to `Validation Matrix` chapter in AOCL userguide document.
+For more information on validated versions of compiler/LLVM, CMake, 
+Python, OpenSSL, and Boost libraries refer to `Validation Matrix` chapter in 
+AOCL userguide document.
 
 To set up and use Build-It-Yourself, you must clone the repository,
 configure the build options, and build the unified binary.
@@ -161,13 +163,7 @@ configure the build options, and build the unified binary.
 First, clone the AOCL repository from GitHub:
 
 ``` console
-$ git clone https://github.amd.com/AOCL/aocl.git 
-$ cd aocl
-```
-or
-
-``` console
-$ git clone git@github.amd.com:AOCL/aocl.git 
+$ git clone https://github.com/amd/aocl.git
 $ cd aocl
 ```
 
@@ -339,16 +335,11 @@ OpenMP library.
 
 Complete the following steps to build and install a single-thread AOCL:
 
-1.  Clone the AOCL from Git repository.
+1.  Clone the AOCL from Git repository
+    (<https://github.com/amd/aocl.git>).
 
-    ``` console
-    $ git clone https://github.amd.com/AOCL/aocl.git 
-    $ cd aocl
-    ```
-    or
-    
-    ``` console
-    $ git clone git@github.amd.com:AOCL/aocl.git 
+    ``` bash
+    $ git clone https://github.com/amd/aocl.git
     $ cd aocl
     ```
 
@@ -380,16 +371,11 @@ Complete the following steps to build and install a single-thread AOCL:
 
 Complete the following steps to install a multi-thread AOCL:
 
-1.  Clone the AOCL from Git repository.
+1.  Clone the AOCL from Git repository
+    (<https://github.com/amd/aocl.git>).
 
-    ``` console
-    $ git clone https://github.amd.com/AOCL/aocl.git 
-    $ cd aocl
-    ```
-    or
-    
-    ``` console
-    $ git clone git@github.amd.com:AOCL/aocl.git 
+    ``` bash
+    $ git clone https://github.com/amd/aocl.git
     $ cd aocl
     ```
 
