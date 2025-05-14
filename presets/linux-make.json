@@ -142,7 +142,7 @@
           },
           {
             "name": "aocl-linux-make-lp-ga-gcc-config",
-            "inherits": ["linux-make", "mt", "lp64", "shared", "complex-return-gnu", "enable_trsm_preinversion", "enable_amd_aocc_flags", "enable_blas_ext_gemmt", "enable_aocl_blas"],
+            "inherits": ["linux-make", "mt", "lp64", "shared", "complex-return-gnu", "enable_trsm_preinversion", "enable_amd_flags", "enable_blas_ext_gemmt", "enable_aocl_blas"],
             "cacheVariables": {
                 "ENABLE_AOCL_UTILS": "ON",
                 "ENABLE_AOCL_BLAS": "ON",
@@ -160,7 +160,7 @@
           },
           {
             "name": "aocl-linux-make-ilp-ga-gcc-config",
-            "inherits": ["linux-make", "mt", "ilp64", "shared", "complex-return-gnu", "enable_trsm_preinversion", "enable_amd_aocc_flags", "enable_blas_ext_gemmt", "enable_aocl_blas"],
+            "inherits": ["linux-make", "mt", "ilp64", "shared", "complex-return-gnu", "enable_trsm_preinversion", "enable_amd_flags", "enable_blas_ext_gemmt", "enable_aocl_blas"],
             "cacheVariables": {
                 "ENABLE_AOCL_UTILS": "ON",
                 "ENABLE_AOCL_BLAS": "ON",
