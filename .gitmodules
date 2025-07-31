@@ -1,0 +1,40 @@
+[submodule "submodules/blis"]
+	path = submodules/blis
+	url = https://github.com/amd/blis.git
+	branch = master
+[submodule "submodules/libflame"]
+	path = submodules/libflame
+	url = https://github.com/amd/libflame.git
+	branch = master
+[submodule "submodules/aocl-scalapack"]
+	path = submodules/aocl-scalapack
+	url = https://github.com/amd/aocl-scalapack.git
+	branch = master
+[submodule "submodules/aocl-sparse"]
+	path = submodules/aocl-sparse
+	url = https://github.com/amd/aocl-sparse.git
+	branch = master
+[submodule "submodules/aocl-utils"]
+	path = submodules/aocl-utils
+	url = https://github.com/amd/aocl-utils.git
+	branch = main
+[submodule "submodules/aocl-crypto"]
+	path = submodules/aocl-crypto
+	url = https://github.com/amd/aocl-crypto.git
+	branch = main
+[submodule "submodules/aocl-compression"]
+	path = submodules/aocl-compression
+	url = https://github.com/amd/aocl-compression.git
+	branch = amd-main
+[submodule "submodules/aocl-libmem"]
+	path = submodules/aocl-libmem
+	url = https://github.com/amd/aocl-libmem.git
+	branch = main
+[submodule "submodules/aocl-libm"]
+	path = submodules/aocl-libm
+	url = https://github.com/amd/aocl-libm-ose.git
+	branch = master
+[submodule "submodules/aocl-data-analytics"]
+	path = submodules/aocl-data-analytics
+	url = https://github.com/amd/aocl-data-analytics.git
+	branch = main

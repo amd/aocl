@@ -69,15 +69,6 @@ else()
     set(BLAS_INT_SIZE "32")
 endif()
 
-# Set threading options based on multithreading option
-if(ENABLE_MULTITHREADING)
-    set(ENABLE_THREADING "openmp")
-    set(AOCL_ENABLE_THREADS ON)
-else()
-    set(ENABLE_THREADING "no")
-    set(AOCL_ENABLE_THREADS OFF)
-endif()
-
 # Set utils library names based on build type and build option
 string(TOLOWER "${CMAKE_BUILD_TYPE}" build_type_lower)
 if(BUILD_STATIC_LIBS)
@@ -120,9 +111,18 @@ string(REPLACE "\\" "/" OpenMP_libomp_LIBRARY "${OpenMP_libomp_LIBRARY}")
 cmake_path(GET OpenMP_libomp_LIBRARY PARENT_PATH EXT_OPENMP_PATH)
 cmake_path(GET OpenMP_libomp_LIBRARY FILENAME EXT_OPENMP_LIB)
 
-# Check if OpenMP_libomp_LIBRARY path exists
-if(OpenMP_libomp_LIBRARY AND NOT EXISTS "${OpenMP_libomp_LIBRARY}")
-    message(FATAL_ERROR "OpenMP library path '${OpenMP_libomp_LIBRARY}' does not exist, please provide a valid path using -DOpenMP_libomp_LIBRARY=<path>")
+# Set threading options based on multithreading option
+if(ENABLE_MULTITHREADING)
+    set(ENABLE_THREADING "openmp")
+    set(AOCL_ENABLE_THREADS ON)
+    
+    # Check if OpenMP_libomp_LIBRARY path exists
+    if(OpenMP_libomp_LIBRARY AND NOT EXISTS "${OpenMP_libomp_LIBRARY}")
+        message(FATAL_ERROR "OpenMP library path '${OpenMP_libomp_LIBRARY}' does not exist, please provide a valid path using -DOpenMP_libomp_LIBRARY=<path>")
+    endif()
+else()
+    set(ENABLE_THREADING "no")
+    set(AOCL_ENABLE_THREADS OFF)
 endif()
 
 # Find OpenMP if multithreading is enabled
