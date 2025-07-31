@@ -16,15 +16,20 @@ Currently, Build-It-Yourself supports selection of AOCL-BLAS,
 AOCL-Utils, AOCL-LAPACK, AOCL-Sparse, AOCL-LibM, AOCL-Compression, and
 AOCL-Cryptography libraries only.
 
+Additionally, we provide all AOCL library sources as git submodules in 
+the `submodules` branch of this repository. This enables offline development 
+and ensures consistent versioning across all components, making it easier to 
+build and work with the complete AOCL ecosystem without external dependencies.
+
 ## Table of Contents
 
 - [AOCL Build-It-Yourself](#aocl-build-it-yourself)
   - [Table of Contents](#table-of-contents)
   - [Project structure](#project-structure)
+  - [Working with AOCL Library Sources via Git Submodules](#working-with-aocl-library-sources-via-git-submodules)
   - [Configure Build-It-Yourself](#configure-build-it-yourself)
     - [Linux Prerequisites](#linux-prerequisites)
     - [Windows Prerequisites](#windows-prerequisites)
-    - [Clone the Repository](#clone-the-repository)
     - [Configure the Build Options](#configure-the-build-options)
     - [Build the Unified Binary](#build-the-unified-binary)
   - [Examples of Configuration and Build Commands using CMake Presets](#examples-of-configuration-and-build-commands-using-cmake-presets)
@@ -37,7 +42,6 @@ AOCL-Cryptography libraries only.
   - [CMake Variables Reference](#cmake-variables-reference)
     - [CMake Options to Select Libraries](#cmake-options-to-select-libraries)
     - [CMake Options to Set Library Source Path](#cMake-options-to-set-library-source-path)
-    - [CMake Options to Set GIT Repository and Tag/Branch](#cmake-options-to-set-git-repository-and-tagbranch)
 
 ## Project Structure
 
@@ -54,6 +58,67 @@ The project is structured as follows:
 - `CMakePresets.json`: CMake presets for different build configurations.
 - `README.md`: This README file.
 - `presets/`: Directory containing preset configurations for different platforms.
+- `submodules/`: Directory containing AOCL library sources as git submodules.
+
+## Working with AOCL Library Sources via Git Submodules
+
+For easier access to all AOCL library sources, we have included the AOCL library sources 
+as git submodules under the `submodules` branch of the repository:
+
+``` console
+$ git clone --recurse-submodules https://github.com/AMD-AOCL/aocl.git -b submodules
+$ cd aocl/submodules  # Navigate to AOCL library sources
+```
+or
+``` console
+$ git clone --recurse-submodules git@github.com:AMD-AOCL/aocl.git -b submodules
+$ cd aocl/submodules  # Navigate to AOCL library sources
+```
+
+The git submodules include: AOCL-BLAS, AOCL-Compression, AOCL-Cryptography, AOCL-DA, AOCL-LAPACK, 
+AOCL-LibM, AOCL-LibMem, AOCL-ScaLAPACK, AOCL-Sparse, and AOCL-Utils.
+
+Alternatively, only selected submodules can be downloaded. The following table shows the mapping 
+between AOCL library names and their corresponding submodule names:
+
+| AOCL Library Name    | Submodule Name                  |
+|-----------------------------|--------------------------|
+| **AOCL-BLAS**        | `submodules/blis`               |
+| **AOCL-Compression** | `submodules/aocl-compression`   |
+| **AOCL-Cryptography**| `submodules/aocl-crypto`        |
+| **AOCL-DA**          | `submodules/aocl-data-analytics`|
+| **AOCL-LAPACK**      | `submodules/libflame`           |
+| **AOCL-LibM**        | `submodules/aocl-libm`          |
+| **AOCL-LibMem**      | `submodules/aocl-libmem`        |
+| **AOCL-ScaLAPACK**   | `submodules/aocl-scalapack`     |
+| **AOCL-Sparse**      | `submodules/aocl-sparse`        |
+| **AOCL-Utils**       | `submodules/aocl-utils`         |
+
+**Example 1: Download only AOCL-BLAS, AOCL-LAPACK, and AOCL-Utils**
+``` console
+$ git clone https://github.com/AMD-AOCL/aocl.git -b submodules
+$ cd aocl
+$ git submodule init
+$ git submodule update submodules/blis submodules/libflame submodules/aocl-utils
+```
+
+**Example 2: Download only AOCL-Sparse and AOCL-Compression**
+``` console
+$ git clone https://github.com/AMD-AOCL/aocl.git -b submodules
+$ cd aocl
+$ git submodule init
+$ git submodule update submodules/aocl-sparse submodules/aocl-compression
+```
+
+**Note:** AOCL-Utils (`submodules/aocl-utils`) is required as a dependency for all AOCL libraries except AOCL-BLAS. 
+When downloading selective submodules, ensure that `submodules/aocl-utils` is included unless you are only building AOCL-BLAS.
+
+This approach provides:
+- All AOCL library sources locally available
+- Consistent versioning across all components
+- Simplified build process without external dependencies
+- Offline development capability
+
 
 ## Configure Build-It-Yourself
 
@@ -146,21 +211,6 @@ AOCL userguide document.
 To set up and use Build-It-Yourself, you must clone the repository,
 configure the build options, and build the unified binary.
 
-### Clone the Repository
-
-First, clone the AOCL repository from GitHub:
-
-``` console
-$ git clone https://github.amd.com/AOCL/aocl.git 
-$ cd aocl
-```
-or
-
-``` console
-$ git clone git@github.amd.com:AOCL/aocl.git 
-$ cd aocl
-```
-
 ### Configure the Build Options
 
 There are multiple CMake options you can configure. The following
@@ -172,8 +222,6 @@ sections explain the CMake options to:
     the following options:
     1.  Setting the path of the AOCL libraries source code (see
         [CMake Options to Set Library Source Path](#cMake-options-to-set-library-source-path))
-    2.  Setting the GIT repository and tag or branch name (see
-        [CMake Options to Set GIT Repository and Tag/Branch](#cmake-options-to-set-git-repository-and-tagbranch))
 3.  Static or Shared Library:
     1.  Static Library `-DBUILD_SHARED_LIBS=OFF`
     2.  Shared Library `-DBUILD_SHARED_LIBS=ON` (default)
@@ -329,20 +377,7 @@ OpenMP library.
 
 Complete the following steps to build and install a single-thread AOCL:
 
-1.  Clone the AOCL from Git repository.
-
-    ``` console
-    $ git clone https://github.amd.com/AOCL/aocl.git 
-    $ cd aocl
-    ```
-    or
-    
-    ``` console
-    $ git clone git@github.amd.com:AOCL/aocl.git 
-    $ cd aocl
-    ```
-
-2.  Configure the library as required:
+1.  Configure the library as required:
 
     ``` bash
     # CMake commands
@@ -360,7 +395,7 @@ Complete the following steps to build and install a single-thread AOCL:
     $ cmake --preset aocl-linux-make-ilp-ga-aocc-config -DENABLE_MULTITHREADING=OFF --fresh 
     ```
 
-3.  Build the unified binary and install using the command:
+2.  Build the unified binary and install using the command:
 
     ``` bash
     $ cmake --build build --config release -j --target install
@@ -370,20 +405,7 @@ Complete the following steps to build and install a single-thread AOCL:
 
 Complete the following steps to install a multi-thread AOCL:
 
-1.  Clone the AOCL from Git repository.
-
-    ``` console
-    $ git clone https://github.amd.com/AOCL/aocl.git 
-    $ cd aocl
-    ```
-    or
-    
-    ``` console
-    $ git clone git@github.amd.com:AOCL/aocl.git 
-    $ cd aocl
-    ```
-
-2.  Configure the library as required:
+1.  Configure the library as required:
 
     ``` bash
     # CMake commands
@@ -404,7 +426,7 @@ Complete the following steps to install a multi-thread AOCL:
     $ cmake --preset aocl-linux-make-lp-ga-gcc-config --fresh -DOpenMP_libomp_LIBRARY=<path to OpenMP library>
     ```
 
-3.  Build the unified binary and install using the command:
+2.  Build the unified binary and install using the command:
 
     ``` bash
     $ cmake --build build --config Release -j --target install
@@ -504,32 +526,3 @@ internet access.
 | **CRYPTO_PATH**          | `-DCRYPTO_PATH=<Directory Path where AOCL-Cryptography is present>`. |
 | **LIBM_PATH**            | `-DLIBM_PATH=<Directory Path where AOCL-LibM is present>`. |
 | **COMPRESSION_PATH**     | `-DCOMPRESSION_PATH=<Directory Path where AOCL-Compression is present>`. |
-
-
-### CMake Options to Set GIT Repository and Tag/Branch
-
-The following table lists CMake variables to specify the GIT repository
-and tag or branch name for cloning individual AOCL libraries. If the
-source code path is not provided, CMake uses the specified GIT
-repository and tag or branch. This is useful for building source code
-from the `dev` branch of individual libraries. If neither the source
-code path nor the GIT repository and tag are provided, CMake defaults to
-the repository and branch/tag for the AOCL stable public release.
-
-| CMake Variable or Option    | Default Value                                      | Usage |
-|-----------------------------|----------------------------------------------------|-----------------------------------------------------------|
-| **UTILS_GIT_REPOSITORY**    | <https://github.com/amd/aocl-utils.git>            | `-DUTILS_GIT_REPOSITORY=<AOCL-Utils Repository URL>` |
-| **UTILS_GIT_TAG**           | `main`                                             | `-DUTILS_GIT_TAG=<AOCL-Utils Git Tag or Branch Name>` |
-| **BLAS_GIT_REPOSITORY**     | <https://github.com/amd/blis.git>                  | `-DBLAS_GIT_REPOSITORY=<AOCL-BLAS Repository URL>` |
-| **BLAS_GIT_TAG**            | `master`                                           | `-DBLAS_GIT_TAG=<AOCL-BLAS Git Tag or Branch Name>` |
-| **LAPACK_GIT_REPOSITORY**   | <https://github.com/amd/libflame.git>              | `-DLAPACK_GIT_REPOSITORY=<AOCL-LAPACK Repository URL>` |
-| **LAPACK_GIT_TAG**          | `master`                                           | `-DLAPACK_GIT_TAG=<AOCL-LAPACK Git Tag or Branch Name>` |
-| **SPARSE_GIT_REPOSITORY**   | <https://github.com/amd/aocl-sparse.git>           | `-DSPARSE_GIT_REPOSITORY=<AOCL-Sparse Repository URL>` |
-| **SPARSE_GIT_TAG**          | `master`                                           | `-DSPARSE_GIT_TAG=<AOCL-Sparse Git Tag or Branch Name>` |
-| **CRYPTO_GIT_REPOSITORY**   | <https://github.com/amd/aocl-crypto.git>           | `-DCRYPTO_GIT_REPOSITORY=<AOCL-Cryptography Repository URL>` |
-| **CRYPTO_GIT_TAG**          | `main`                                             | `-DCRYPTO_GIT_TAG=<AOCL-Cryptography Git Tag or Branch Name>` |
-| **LIBM_GIT_REPOSITORY**     | <https://github.com/amd/aocl-libm-ose.git>         | `-DLIBM_GIT_REPOSITORY=<AOCL-LibM Repository URL>` |
-| **LIBM_GIT_TAG**            | `master`                                           | `-DLIBM_GIT_TAG=<AOCL-LibM Git Tag or Branch Name>` |
-| **COMPRESSION_GIT_REPOSITORY** | <https://github.com/amd/aocl-compression.git>   | `-DCOMPRESSION_GIT_REPOSITORY=<AOCL-Compression Repository URL>` |
-| **COMPRESSION_GIT_TAG**     | `amd-main`                                         | `-DCOMPRESSION_GIT_TAG=<AOCL-Compression Git Tag or Branch Name>` |
-
