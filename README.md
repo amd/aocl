@@ -68,12 +68,12 @@ For easier access to all AOCL library sources, we have included the AOCL library
 as git submodules under the `submodules` branch of the repository:
 
 ``` console
-$ git clone --recurse-submodules https://github.com/AMD-AOCL/aocl.git -b submodules
+$ git clone --recurse-submodules https://github.com/amd/aocl.git -b submodules
 $ cd aocl/submodules  # Navigate to AOCL library sources
 ```
 or
 ``` console
-$ git clone --recurse-submodules git@github.com:AMD-AOCL/aocl.git -b submodules
+$ git clone --recurse-submodules git@github.com:amd/aocl.git -b submodules
 $ cd aocl/submodules  # Navigate to AOCL library sources
 ```
 
@@ -98,7 +98,7 @@ between AOCL library names and their corresponding submodule names:
 
 **Example 1: Download only AOCL-BLAS, AOCL-LAPACK, and AOCL-Utils**
 ``` console
-$ git clone https://github.com/AMD-AOCL/aocl.git -b submodules
+$ git clone https://github.com/amd/aocl.git -b submodules
 $ cd aocl
 $ git submodule init
 $ git submodule update submodules/blis submodules/libflame submodules/aocl-utils
@@ -106,7 +106,7 @@ $ git submodule update submodules/blis submodules/libflame submodules/aocl-utils
 
 **Example 2: Download only AOCL-Sparse and AOCL-Compression**
 ``` console
-$ git clone https://github.com/AMD-AOCL/aocl.git -b submodules
+$ git clone https://github.com/amd/aocl.git -b submodules
 $ cd aocl
 $ git submodule init
 $ git submodule update submodules/aocl-sparse submodules/aocl-compression
