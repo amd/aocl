@@ -56,6 +56,8 @@ The project is structured as follows:
 - `aocl_utils_build.cmake`: CMake script for building AOCL-UTILS.
 - `CMakeLists.txt`: Main CMake script for the AOCL project.
 - `CMakePresets.json`: CMake presets for different build configurations.
+- `LICENSE.txt`: This is consolidated LICENSE file.
+- `NOTICES.txt`: This is Third-Party Notices file.
 - `README.md`: This README file.
 - `presets/`: Directory containing preset configurations for different platforms.
 - `submodules/`: Directory containing AOCL library sources as git submodules.
