@@ -4,18 +4,24 @@ Source Code – Open Source Release
 
 This document provides a consolidated list of the licenses and notices for the open sourced libraries and associated components in the AOCL repository.
 
-Contents
-AOCL-Compression	2
-AOCL-Cryptography	12
-AOCL-Data Analytics	14
-AOCL-LibM	17
-AOCL-LibMem	21
-AOCL-Scalapack	22
-AOCL-Sparse	25
-AOCL-Utils	26
-AOCL-BLIS	28
-AOCL-LIBFLAME	32
+PLEASE TAKE NOTICE that you are only subject to the license terms for the
+components, which you actually download. If a component listed here is not
+downloaded, its license terms do not apply to you. Please review the license
+terms for any downloaded components to ensure compliance.
 
+
+Contents:
+
+-AOCL-Compression
+-AOCL-Cryptography
+-AOCL-Data Analytics
+-AOCL-LibM
+-AOCL-LibMem
+-AOCL-Scalapack
+-AOCL-Sparse
+-AOCL-Utils
+-AOCL-BLIS
+-AOCL-LIBFLAME
 
 
  
