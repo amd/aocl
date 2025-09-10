@@ -78,7 +78,7 @@ endif()
 
 # Execute the build command
 execute_process(
-    COMMAND cmake --build ${CMAKE_BINARY_DIR}/blis/build_dir --config ${CMAKE_BUILD_TYPE} --target install -j
+    COMMAND cmake --build ${CMAKE_BINARY_DIR}/blis/build_dir --config ${CMAKE_BUILD_TYPE} --target install ${parallel}
     WORKING_DIRECTORY ${BLAS_DIR}
     RESULT_VARIABLE result
     OUTPUT_VARIABLE output

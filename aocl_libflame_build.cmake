@@ -126,7 +126,7 @@ endif()
 
 # Execute the build command
 execute_process(
-    COMMAND cmake --build ${CMAKE_BINARY_DIR}/libflame/build_dir --config ${CMAKE_BUILD_TYPE} -j
+    COMMAND cmake --build ${CMAKE_BINARY_DIR}/libflame/build_dir --config ${CMAKE_BUILD_TYPE} ${parallel}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/libflame/build_dir 
     RESULT_VARIABLE result
     OUTPUT_VARIABLE output

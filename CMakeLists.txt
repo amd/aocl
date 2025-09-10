@@ -37,6 +37,23 @@ message("CMAKE_CONFIGURATION_TYPES: ${CMAKE_CONFIGURATION_TYPES}")
 message("CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 message("CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}")
 
+# Calculate approximately 50% of the available CPU cores on the build machine
+# to use with the -j option for parallel builds, balancing performance and memory usage.
+# Detect number of available processors
+if(UNIX)
+    execute_process(COMMAND nproc
+                    OUTPUT_VARIABLE NUM_CORES
+                    OUTPUT_STRIP_TRAILING_WHITESPACE)
+    # Calculate 50% of cores (round up to at least 1)
+    math(EXPR BUILD_CORES "(${NUM_CORES} + 1) / 2")  # +1 ensures rounding up
+
+    # Message for debug/logging
+    message(STATUS "Using ${BUILD_CORES} cores for parallel build out of ${NUM_CORES} available.")
+    set(parallel "-j${BUILD_CORES}")
+else()
+    set(parallel "-j")
+endif()
+
 # Define build options
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 option(ENABLE_AOCL_UTILS "Check if we need to include AOCL-Utils into AOCL unified library" ON)
@@ -46,6 +63,7 @@ option(ENABLE_AOCL_SPARSE "Check if we need to include AOCL-Sparse into AOCL uni
 option(ENABLE_AOCL_CRYPTO "Check if we need to include AOCL-Crypto into AOCL unified library" OFF)
 option(ENABLE_AOCL_LIBM "Check if we need to include AOCL-LibM into AOCL unified library" OFF)
 option(ENABLE_AOCL_COMPRESSION "Check if we need to include AOCL-Compression into AOCL single library" OFF)
+option(ENABLE_AOCL_DA "Check if we need to include AOCL-DA into AOCL unified library" OFF)
 option(ENABLE_MULTITHREADING "Check if we need to enable multithreading" OFF)
 option(ENABLE_CBLAS "Check if we need to enable AOCL-BLAS CBLAS interface" ON)
 option(ENABLE_AMD_FLAGS "Check if we need to enable amd flags for AOCL-LAPACK library build" OFF)
@@ -193,6 +211,34 @@ if(ENABLE_AOCL_SPARSE)
     include(aocl_sparse_build.cmake)
 endif()
 
+if(ENABLE_AOCL_DA)
+    enable_language(Fortran)
+    if(NOT ENABLE_AOCL_BLAS OR NOT ENABLE_AOCL_UTILS OR NOT ENABLE_AOCL_LAPACK OR NOT ENABLE_AOCL_SPARSE)
+        message(WARNING "AOCL-DA has dependency on AOCL-BLAS, AOCL-LAPACK and AOCL-Utils. Hence ENABLE_AOCL_BLAS, ENABLE_AOCL_LAPACK, ENABLE_AOCL_SPARSE and ENABLE_AOCL_UTILS should be \"check\" or \"ON\"")
+        if(NOT ENABLE_AOCL_UTILS)
+            set(ENABLE_AOCL_UTILS ON)
+            include(aocl_utils_build.cmake)
+        endif()
+
+        if(NOT ENABLE_AOCL_BLAS)
+            set(ENABLE_AOCL_BLAS ON)
+            include(aocl_blis_build.cmake)
+        endif()
+
+        if(NOT ENABLE_AOCL_LAPACK)
+            set(ENABLE_AOCL_LAPACK ON)
+            include(aocl_libflame_build.cmake)
+        endif()
+
+        if(NOT ENABLE_AOCL_SPARSE)
+            set(ENABLE_AOCL_SPARSE ON)
+            include(aocl_sparse_build.cmake)
+        endif()
+    endif()
+
+    include(aocl_da_build.cmake)
+endif()
+
 if(ENABLE_AOCL_LIBM)
     if(NOT ENABLE_AOCL_UTILS)
         set(ENABLE_AOCL_UTILS ON)
@@ -212,7 +258,7 @@ if(ENABLE_AOCL_CRYPTO)
             message(STATUS "OPENSSL_INSTALL_DIR environment variable is set correctly.")
         endif()
     elseif(UNIX)
-        if((NOT IS_DIRECTORY "${OPENSSL_INSTALL_DIR}/lib64" AND NOT IS_DIRECTORY "${OPENSSL_INSTALL_DIR}/lib") OR NOT IS_DIRECTORY "${OPENSSL_INSTALL_DIR}/include")
+        if(NOT ((IS_DIRECTORY "${OPENSSL_INSTALL_DIR}/lib64" OR IS_DIRECTORY "${OPENSSL_INSTALL_DIR}/lib") AND (IS_DIRECTORY "${OPENSSL_INSTALL_DIR}/include")))
             message(FATAL_ERROR "OPENSSL_INSTALL_DIR environment variable is not set correctly or ${OPENSSL_INSTALL_DIR} does not contain 'lib' or 'lib64' and 'include' folders. Please also ensure crypto and openssl libraries are present in ${OPENSSL_INSTALL_DIR}/lib or ${OPENSSL_INSTALL_DIR}/lib64 folder.")
         elseif((IS_DIRECTORY "${OPENSSL_INSTALL_DIR}/lib64" AND (NOT EXISTS "${OPENSSL_INSTALL_DIR}/lib64/libcrypto.so" OR NOT EXISTS "${OPENSSL_INSTALL_DIR}/lib64/libssl.so")) OR (IS_DIRECTORY "${OPENSSL_INSTALL_DIR}/lib" AND (NOT EXISTS "${OPENSSL_INSTALL_DIR}/lib/libcrypto.so" OR NOT EXISTS "${OPENSSL_INSTALL_DIR}/lib/libssl.so")))
             message(FATAL_ERROR "${OPENSSL_INSTALL_DIR} does not contain 'libcrypto.so' and 'libssl.so' libraries in 'lib' or 'lib64' folder.")
@@ -257,6 +303,9 @@ if(BUILD_SHARED_LIBS)
     if(WIN32)
         target_link_options(${PROJECT_NAME} PRIVATE "/DEF:${MERGED_DEF}")
         set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /dll")
+		if(CMAKE_Fortran_COMPILER)
+	        target_link_directories(${PROJECT_NAME} PRIVATE "C:/Program Files (x86)/Intel/oneAPI/compiler/latest/lib")
+		endif()
     else()
         if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
             set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=ld")
