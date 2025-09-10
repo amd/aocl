@@ -92,7 +92,7 @@ endif()
 
 # Execute the build command
 execute_process(
-    COMMAND cmake --build ${CMAKE_BINARY_DIR}/aocl-libm/build_dir --config ${CMAKE_BUILD_TYPE} --target install -j
+    COMMAND cmake --build ${CMAKE_BINARY_DIR}/aocl-libm/build_dir --config ${CMAKE_BUILD_TYPE} --target install ${parallel}
     WORKING_DIRECTORY ${LIBM_DIR}
     RESULT_VARIABLE result
     OUTPUT_VARIABLE output
