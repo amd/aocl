@@ -64,6 +64,7 @@ option(ENABLE_AOCL_CRYPTO "Check if we need to include AOCL-Crypto into AOCL uni
 option(ENABLE_AOCL_LIBM "Check if we need to include AOCL-LibM into AOCL unified library" OFF)
 option(ENABLE_AOCL_COMPRESSION "Check if we need to include AOCL-Compression into AOCL single library" OFF)
 option(ENABLE_AOCL_DA "Check if we need to include AOCL-DA into AOCL unified library" OFF)
+option(ENABLE_AOCL_LIBMEM "Check if we need to include AOCL-LibMem into AOCL unified library" OFF)
 option(ENABLE_MULTITHREADING "Check if we need to enable multithreading" OFF)
 option(ENABLE_CBLAS "Check if we need to enable AOCL-BLAS CBLAS interface" ON)
 option(ENABLE_AMD_FLAGS "Check if we need to enable amd flags for AOCL-LAPACK library build" OFF)
@@ -170,6 +171,12 @@ endif()
 
 if(ENABLE_AOCL_BLAS)
     include(aocl_blis_build.cmake)
+endif()
+
+if(UNIX AND ENABLE_AOCL_LIBMEM)
+    include(aocl_libmem_build.cmake)
+elseif(ENABLE_AOCL_LIBMEM)
+    message(WARNING "AOCL-LibMem is only supported on UNIX platforms.")
 endif()
 
 if(ENABLE_AOCL_LAPACK)
