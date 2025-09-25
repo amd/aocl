@@ -13,8 +13,8 @@ of multiple AOCL libraries.
 **Note**
 
 Currently, Build-It-Yourself supports selection of AOCL-BLAS,
-AOCL-Utils, AOCL-LAPACK, AOCL-Sparse, AOCL-LibM, AOCL-Compression, and
-AOCL-Cryptography libraries only.
+AOCL-Utils, AOCL-LAPACK, AOCL-Sparse, AOCL-LibM, AOCL-Compression,
+AOCL-Cryptography, AOCL-Data-Analytics, and AOCL-LibMem libraries only.
 
 ## Table of Contents
 
@@ -46,8 +46,10 @@ The project is structured as follows:
 - `aocl_blis_build.cmake`: CMake script for building AOCL-BLAS.
 - `aocl_compression_build.cmake`: CMake script for building AOCL-COMPRESSION.
 - `aocl_crypto_build.cmake`: CMake script for building AOCL-CRYPTO.
+- `aocl_da_build.cmake`: CMake script for building AOCL-DATA-ANALYTICS.
 - `aocl_libflame_build.cmake`: CMake script for building AOCL-LAPACK.
 - `aocl_libm_build.cmake`: CMake script for building AOCL-LIBM.
+- `aocl_libmem_build.cmake`: CMake script for building AOCL-LIBMEM.
 - `aocl_sparse_build.cmake`: CMake script for building AOCL-SPARSE.
 - `aocl_utils_build.cmake`: CMake script for building AOCL-UTILS.
 - `CMakeLists.txt`: Main CMake script for the AOCL project.
@@ -94,6 +96,15 @@ The following dependencies must be met for installing AOCL on Linux:
     $ export OPENSSL_INSTALL_DIR=/home/user/openssl
     ```
 
+-   Boost libraries for AOCL-Data-Analytics:
+
+    -   Define the environment variable `BOOST_ROOT` to point
+        to Boost installation:
+
+    ``` bash
+    $ export BOOST_ROOT=/home/user/boost
+    ```
+
 **Note**
 
 To build the AOCL-Cryptography library, the `libcrypto.so` and
@@ -129,6 +140,7 @@ The following dependencies must be met for building AOCL on Windows:
     ``` console
     $ set OPENSSL_INSTALL_DIR=C:/Program Files/OpenSSL-Win64
     ```
+-   Boost libraries for AOCL-Data-Analytics.
 
 **Note**
 
@@ -139,9 +151,7 @@ sure this directory includes the `include` and `lib` folders. Within the
 `lib` folder, ensure that the `libcrypto.lib` and `libssl.lib` libraries
 are present.
 
-For more information on validated versions of compiler/LLVM, CMake and
-Python, and OpenSSL libraries refer to `Validation Matrix` chapter in 
-AOCL userguide document.
+For more information on validated versions of compiler/LLVM, CMake, Python, OpenSSL, and Boost libraries refer to `Validation Matrix` chapter in AOCL userguide document.
 
 To set up and use Build-It-Yourself, you must clone the repository,
 configure the build options, and build the unified binary.
@@ -486,6 +496,8 @@ individual AOCL libraries.
 | **ENABLE_AOCL_CRYPTO**    | `-DENABLE_AOCL_CRYPTO=OFF` (default) or `-DENABLE_AOCL_CRYPTO=ON` to include in the library. |
 | **ENABLE_AOCL_LIBM**      | `-DENABLE_AOCL_LIBM=OFF` (default) or `-DENABLE_AOCL_LIBM=ON` to include in the library. |
 | **ENABLE_AOCL_COMPRESSION** | `-DENABLE_AOCL_COMPRESSION=OFF` (default) or `-DENABLE_AOCL_COMPRESSION=ON` to include in the library. |
+| **ENABLE_AOCL_DA**        | `-DENABLE_AOCL_DA=OFF` (default) or `-DENABLE_AOCL_DA=ON` to include in the library. |
+| **ENABLE_AOCL_LIBMEM**    | `-DENABLE_AOCL_LIBMEM=OFF` (default) or `-DENABLE_AOCL_LIBMEM=ON` to include in the library. |
 
 
 ### CMake Options to Set Library Source Path
@@ -504,6 +516,8 @@ internet access.
 | **CRYPTO_PATH**          | `-DCRYPTO_PATH=<Directory Path where AOCL-Cryptography is present>`. |
 | **LIBM_PATH**            | `-DLIBM_PATH=<Directory Path where AOCL-LibM is present>`. |
 | **COMPRESSION_PATH**     | `-DCOMPRESSION_PATH=<Directory Path where AOCL-Compression is present>`. |
+| **DA_PATH**              | `-DDA_PATH=<Directory Path where AOCL-Data-Analytics is present>`. |
+| **LIBMEM_PATH**          | `-DLIBMEM_PATH=<Directory Path where AOCL-LibMem is present>`. |
 
 
 ### CMake Options to Set GIT Repository and Tag/Branch
@@ -532,4 +546,8 @@ the repository and branch/tag for the AOCL stable public release.
 | **LIBM_GIT_TAG**            | `master`                                           | `-DLIBM_GIT_TAG=<AOCL-LibM Git Tag or Branch Name>` |
 | **COMPRESSION_GIT_REPOSITORY** | <https://github.com/amd/aocl-compression.git>   | `-DCOMPRESSION_GIT_REPOSITORY=<AOCL-Compression Repository URL>` |
 | **COMPRESSION_GIT_TAG**     | `amd-main`                                         | `-DCOMPRESSION_GIT_TAG=<AOCL-Compression Git Tag or Branch Name>` |
+| **DA_GIT_REPOSITORY**       | <https://github.com/amd/aocl-data-analytics.git>   | `-DDA_GIT_REPOSITORY=<AOCL-Data-Analytics Repository URL>` |
+| **DA_GIT_TAG**              | `main`                                             | `-DDA_GIT_TAG=<AOCL-Data-Analytics Git Tag or Branch Name>` |
+| **LIBMEM_GIT_REPOSITORY**   | <https://github.com/amd/aocl-libmem.git>           | `-DLIBMEM_GIT_REPOSITORY=<AOCL-LibMem Repository URL>` |
+| **LIBMEM_GIT_TAG**          | `main`                                             | `-DLIBMEM_GIT_TAG=<AOCL-LibMem Git Tag or Branch Name>` |
 
