@@ -42,8 +42,10 @@ teams:
         branches:
           - amd-main
       - type: CodePorting
-        enabled: true
+        enabled: false
+        branches:
+          - amd-main
       - type: CodePortingHistorical
-        enabled: true
+        enabled: false
         branches:
           - amd-main
