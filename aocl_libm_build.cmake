@@ -1,4 +1,4 @@
-# Copyright (C) 2025, Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2025-2026, Advanced Micro Devices, Inc. All rights reserved.
 
 # Set CMake policy
 cmake_policy(SET CMP0010 NEW)
@@ -71,21 +71,21 @@ else()
     set(UTILS_LIB "${CMAKE_BINARY_DIR}/aocl-utils/install_package/lib/${Linux_Utils_Lib_Name}")
 endif()
 
-# Replace string in ${LIBM_DIR}/src/CMakeLists.txt
-set(target_file "${LIBM_DIR}/src/CMakeLists.txt")
-file(READ "${target_file}" file_content)
-# Regex pattern to match the line (allow spaces)
-set(pattern "set\\(AOCL_UTILS_LIB[ \t]+\\$\\{AOCL_UTILS_LIB_DIR\\}/\\$\\{AOCL_UTILS_LIB\\}\\)")
-# Replace with empty string
-string(REGEX REPLACE "${pattern}" "" file_content "${file_content}")
-file(WRITE "${target_file}" "${file_content}")
+# Set ALM_STATIC_DISPATCH option based on AMD_CONFIG
+if(AMD_CONFIG AND NOT AMD_CONFIG STREQUAL "amdzen")
+    set(ALM_STATIC_DISPATCH_OPTION "-DALM_STATIC_DISPATCH=${ALM_STATIC_DISPATCH_OPTION}")
+    message(STATUS "AOCL-LIBM: ALM_STATIC_DISPATCH set to ${ALM_STATIC_DISPATCH_OPTION}")
+else()
+    set(ALM_STATIC_DISPATCH_OPTION "")
+    message(STATUS "AOCL-LIBM: ALM_STATIC_DISPATCH disabled")
+endif()
 
 # Log the configuration command
-file(APPEND "${LIBM_BUILD_LOG_FILE_PATH}" "CONFIGURATION COMMAND: cmake -G \"${CMAKE_GENERATOR}\" -S ${LIBM_DIR} -B ${CMAKE_BINARY_DIR}/aocl-libm/build_dir -DCMAKE_CONFIGURATION_TYPES=${CMAKE_CONFIGURATION_TYPES} -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DAOCL_UTILS_INCLUDE_DIR=${CMAKE_BINARY_DIR}/aocl-utils/install_package/include -DAOCL_UTILS_LIB=${UTILS_LIB} -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/aocl-libm/install_package ${CompilerToolSet}.\n")
+file(APPEND "${LIBM_BUILD_LOG_FILE_PATH}" "CONFIGURATION COMMAND: cmake -G \"${CMAKE_GENERATOR}\" -S ${LIBM_DIR} -B ${CMAKE_BINARY_DIR}/aocl-libm/build_dir -DCMAKE_CONFIGURATION_TYPES=${CMAKE_CONFIGURATION_TYPES} -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DAOCL_UTILS_INCLUDE_DIR=${CMAKE_BINARY_DIR}/aocl-utils/install_package/include -DAOCL_UTILS_LIB=${UTILS_LIB} -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/aocl-libm/install_package ${CompilerToolSet} ${ALM_STATIC_DISPATCH_OPTION}.\n")
 
 # Execute the configuration command
 execute_process(
-    COMMAND cmake -G ${CMAKE_GENERATOR} -S ${LIBM_DIR} -B ${CMAKE_BINARY_DIR}/aocl-libm/build_dir -DCMAKE_CONFIGURATION_TYPES=${CMAKE_CONFIGURATION_TYPES} -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DAOCL_UTILS_INCLUDE_DIR=${CMAKE_BINARY_DIR}/aocl-utils/install_package/include -DAOCL_UTILS_LIB=${UTILS_LIB} -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/aocl-libm/install_package ${CompilerToolSet}
+    COMMAND cmake -G ${CMAKE_GENERATOR} -S ${LIBM_DIR} -B ${CMAKE_BINARY_DIR}/aocl-libm/build_dir -DCMAKE_CONFIGURATION_TYPES=${CMAKE_CONFIGURATION_TYPES} -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DAOCL_UTILS_INCLUDE_DIR=${CMAKE_BINARY_DIR}/aocl-utils/install_package/include -DAOCL_UTILS_LIB=${UTILS_LIB} -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/aocl-libm/install_package ${CompilerToolSet} ${ALM_STATIC_DISPATCH_OPTION}
     WORKING_DIRECTORY ${LIBM_DIR}
     RESULT_VARIABLE result
     OUTPUT_VARIABLE output

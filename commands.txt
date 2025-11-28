@@ -1,0 +1,224 @@
+# AOCL Symbol Renaming - Build and Test Commands
+# Updated: December 10, 2025
+
+# ============================================================================
+# IMPORTANT: PLACEHOLDER DEFINITIONS
+# ============================================================================
+# Throughout this file, replace these placeholders with your actual paths:
+#   <AOCL_DIR> = Your AOCL repository clone directory
+#                Example: <AOCL_DIR>=~/workspace/aocl or <AOCL_DIR>=/home/user/projects/aocl
+#
+# Other environment variables you may need to adjust:
+#   OPENSSL_INSTALL_DIR = Path to OpenSSL installation (default: $HOME/openssl)
+# ============================================================================
+
+# ============================================================================
+# COMPLETE BUILD SEQUENCE (WITH Symbol Renaming)
+# ============================================================================
+
+# Step 1: Clean workspace
+cd <AOCL_DIR>
+rm -rf build install_package
+
+# Step 2: Set environment
+# Note: Assuming OpenSSL is installed in $HOME/openssl. Adjust path if needed.
+export OPENSSL_INSTALL_DIR=$HOME/openssl
+
+# Step 3: Configure with symbol renaming
+cmake --preset aocl-linux-make-lp-ga-gcc-config \
+  -DENABLE_TESTS=ON \
+  -DSYMBOL_RENAME_PREFIX=AOCL_
+
+# Step 4: Build and Install libraries (triggers automatic symbol renaming)
+cd build
+cmake --build . --target install -j 10
+
+# Step 5: Build both test executables
+cmake --build . --target test_original_symbols test_renamed_symbols -j 10
+
+# Step 6: Run tests
+./test/test_original_symbols
+./test/test_renamed_symbols
+
+# Step 7: Verify renamed symbols
+nm -D ../install_package/renamed/lib/libaocl.so | grep -E "AOCL_DGEMM_|aocl_cblas_dgemm" | head -5
+
+# ============================================================================
+# BUILD SEQUENCE (WITHOUT Symbol Renaming)
+# ============================================================================
+
+# Step 1-2: Same as above
+
+# Step 3: Configure without symbol renaming
+cd <AOCL_DIR>
+cmake --preset aocl-linux-make-lp-ga-gcc-config \
+  -DENABLE_TESTS=ON
+  # Note: No -DSYMBOL_RENAME_PREFIX specified
+
+# Step 4: Build and Install libraries (no symbol renaming)
+cd build
+cmake --build . --target install -j 10
+
+# Step 5: Build only original test
+cmake --build . --target test_original_symbols -j 10
+
+# Step 6: Run test
+./test/test_original_symbols
+
+# ============================================================================
+# AUTOMATED BUILD SCRIPT
+# ============================================================================
+
+#!/bin/bash
+set -e
+
+# Set your AOCL directory path here (replace <AOCL_DIR> with your actual path)
+AOCL_DIR="<AOCL_DIR>"  # Example: ~/workspace/aocl or /home/user/projects/aocl
+cd "$AOCL_DIR"
+rm -rf build install_package
+export OPENSSL_INSTALL_DIR=$HOME/openssl
+
+# Configure with symbol renaming
+cmake --preset aocl-linux-make-lp-ga-gcc-config \
+  -DENABLE_TESTS=ON \
+  -DSYMBOL_RENAME_PREFIX=AOCL_
+
+cd build
+
+# Build and Install libraries (triggers automatic symbol renaming)
+cmake --build . --target install -j 10
+
+# Build both test executables
+cmake --build . --target test_original_symbols test_renamed_symbols -j 10
+
+# Run tests
+echo "=== Testing ORIGINAL symbols ==="
+./test/test_original_symbols
+
+if [ -f ./test/test_renamed_symbols ]; then
+    echo "=== Testing RENAMED symbols (AOCL_ prefix) ==="
+    ./test/test_renamed_symbols
+fi
+
+echo "✅ Build and tests completed successfully!"
+
+# ============================================================================
+# BUILDING WITH DIFFERENT PREFIXES
+# ============================================================================
+
+# Example: AOCL51_ prefix
+cmake --preset aocl-linux-make-lp-ga-gcc-config \
+  -DENABLE_TESTS=ON \
+  -DSYMBOL_RENAME_PREFIX=AOCL51_
+
+# Example: AOCL52_ prefix
+cmake --preset aocl-linux-make-lp-ga-gcc-config \
+  -DENABLE_TESTS=ON \
+  -DSYMBOL_RENAME_PREFIX=AOCL52_
+
+# Example: Custom prefix
+cmake --preset aocl-linux-make-lp-ga-gcc-config \
+  -DENABLE_TESTS=ON \
+  -DSYMBOL_RENAME_PREFIX=MYLIB_
+
+# ============================================================================
+# IMPORTANT NOTES
+# ============================================================================
+
+# Symbol Renaming Behavior
+# - UPPERCASE Fortran symbols (DGEMM_) → UPPERCASE prefix (AOCL_DGEMM_)
+# - lowercase C symbols (cblas_dgemm) → lowercase prefix (aocl_cblas_dgemm)
+# - Test macros handle case conversion automatically
+
+# Conditional Test Building
+# - If SYMBOL_RENAME_PREFIX is set: Builds both test executables
+# - If SYMBOL_RENAME_PREFIX is empty/not set: Builds only test_original_symbols
+# - No need to reconfigure CMake between tests
+
+# Library Requirements
+# - Both static (.a) and shared (.so) libraries must be built
+# - Static library is used for symbol renaming
+# - Shared library is created from renamed static library
+
+# Installation Structure
+# - Original: install_package/lib/ and install_package/include/
+# - Renamed: install_package/renamed/lib/ and install_package/renamed/include/
+
+# Test Executables
+# - test_original_symbols: Links to install_package/lib/libaocl.so
+# - test_renamed_symbols: Links to install_package/renamed/lib/libaocl.so
+# - Both built simultaneously, no reconfiguration needed
+
+# ============================================================================
+# VERIFICATION COMMANDS
+# ============================================================================
+
+# Check built libraries
+ls -lh build/libaocl.*
+
+# Check installed libraries
+ls -lh install_package/lib/
+ls -lh install_package/renamed/lib/  # Only if renaming enabled
+
+# Verify original symbols
+nm -D install_package/lib/libaocl.so | grep -E "DGEMM_|cblas_dgemm" | head -5
+
+# Verify renamed symbols
+nm -D install_package/renamed/lib/libaocl.so | grep -E "AOCL_DGEMM_|aocl_cblas_dgemm" | head -5
+
+# Check test executables
+ls -lh build/test/test_*
+
+# ============================================================================
+# TROUBLESHOOTING
+# ============================================================================
+
+# Issue: "No rule to make target 'test_renamed_symbols'"
+# Solution: Add -DSYMBOL_RENAME_PREFIX=AOCL_ to your CMake configuration
+
+# Issue: Symbol renaming not happening
+# Solution: Ensure SYMBOL_RENAME_PREFIX is set and not empty
+
+# Issue: Test linking errors
+# Solution: Verify libraries are installed before building tests
+
+# Issue: Runtime library not found
+# Solution: Check LD_LIBRARY_PATH or use test executables with RPATH
+
+# ============================================================================
+# CI/CD INTEGRATION
+# ============================================================================
+
+#!/bin/bash
+# Multi-version testing script
+
+test_with_prefix() {
+    local PREFIX=$1
+    echo "Testing with prefix: $PREFIX"
+    
+    # Set your AOCL directory path here (replace <AOCL_DIR> with your actual path)
+    AOCL_DIR="<AOCL_DIR>"  # Example: ~/workspace/aocl or /home/user/projects/aocl
+    cd "$AOCL_DIR"
+    rm -rf build install_package
+    export OPENSSL_INSTALL_DIR=$HOME/openssl
+    
+    cmake --preset aocl-linux-make-lp-ga-gcc-config \
+      -DENABLE_TESTS=ON \
+      -DSYMBOL_RENAME_PREFIX=$PREFIX
+    
+    cd build
+    cmake --build . --target install -j $(nproc)
+    
+    cmake --build . --target test_original_symbols test_renamed_symbols -j $(nproc)
+    ./test/test_original_symbols || exit 1
+    ./test/test_renamed_symbols || exit 1
+    
+    echo "✅ Tests passed for prefix: $PREFIX"
+}
+
+# Test multiple configurations
+test_with_prefix "AOCL_"
+test_with_prefix "AOCL51_"
+test_with_prefix "AOCL52_"
+
+echo "✅ All configurations validated!"
