@@ -42,6 +42,7 @@ build and work with the complete AOCL ecosystem without external dependencies.
   - [Verifying AOCL Installation](#verifying-aocl-installation)
   - [CMake Variables Reference](#cmake-variables-reference)
     - [CMake Options to Select Libraries](#cmake-options-to-select-libraries)
+    - [CMake Options for AMD Architecture-Specific Optimizations](#cmake-options-for-amd-architecture-specific-optimizations)
     - [CMake Options to Set Library Source Path](#cMake-options-to-set-library-source-path)
 
 ## Project Structure
@@ -525,6 +526,42 @@ individual AOCL libraries.
 | **ENABLE_AOCL_COMPRESSION** | `-DENABLE_AOCL_COMPRESSION=OFF` (default) or `-DENABLE_AOCL_COMPRESSION=ON` to include in the library. |
 | **ENABLE_AOCL_DA**        | `-DENABLE_AOCL_DA=OFF` (default) or `-DENABLE_AOCL_DA=ON` to include in the library. |
 | **ENABLE_AOCL_LIBMEM**    | `-DENABLE_AOCL_LIBMEM=OFF` (default) or `-DENABLE_AOCL_LIBMEM=ON` to include in the library. |
+
+### CMake Options for AMD Architecture-Specific Optimizations
+
+The following table lists the CMake variable used to enable ISA-specific optimizations for AMD processors.
+
+| CMake Variable or Option  | Usage |
+|---------------------------|---------------------------------------------------------------|
+| **AMD_CONFIG**            | `-DAMD_CONFIG=<value>` to enable architecture-specific optimizations. Supported values: `zen`, `zen2`, `zen3`, `zen4`, `zen5`, `amdzen`. If not specified (empty), defaults to `amdzen` for generic AMD builds. |
+
+**AMD_CONFIG Impact on Libraries:**
+
+- **AOCL-BLAS (BLIS)**: Maps directly to `BLIS_CONFIG_FAMILY` configuration.
+- **AOCL-LAPACK (LibFlame)**: 
+  - `zen`, `zen2`, `zen3` → AVX2-STRICT optimizations
+  - `zen4`, `zen5` → AVX512-STRICT optimizations
+  - Default: AVX2
+- **AOCL-LibM**: 
+  - `zen` → Static dispatch with AVX2
+  - `zen2` → Static dispatch with ZEN2
+  - `zen3` → Static dispatch with ZEN3
+  - `zen4` → Static dispatch with ZEN4
+  - `zen5` → Static dispatch with ZEN5
+  - Default: Dynamic dispatch (runtime detection)
+
+**Examples:**
+
+```bash
+# Build with Zen 4 optimizations (AVX512 for LAPACK and LibM)
+$ cmake --preset aocl-linux-make-lp-ga-gcc-config -DAMD_CONFIG=zen4 --fresh
+
+# Build with Zen 2 optimizations (AVX2 for LAPACK, static dispatch for LibM)
+$ cmake --preset aocl-linux-make-lp-ga-gcc-config -DAMD_CONFIG=zen2 --fresh
+
+# Build with generic AMD optimizations (dynamic dispatch)
+$ cmake --preset aocl-linux-make-lp-ga-gcc-config -DAMD_CONFIG=amdzen --fresh
+```
 
 
 ### CMake Options to Set Library Source Path

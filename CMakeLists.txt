@@ -108,8 +108,49 @@ else()
     endif()
 endif()
 
-# Set AOCL-BLAS configuration family and addons
-set(BLIS_CONFIG_FAMILY "amdzen" CACHE STRING "Blis configuration family")
+# Set AMD ISA (Instruction Set Architecture) for optimized builds
+set(AMD_CONFIG "" CACHE STRING "AMD ISA target (empty, zen, zen2, zen3, zen4, zen5, amdzen)")
+set_property(CACHE AMD_CONFIG PROPERTY STRINGS "" "zen" "zen2" "zen3" "zen4" "zen5" "amdzen")
+
+# Validate AMD_CONFIG value if provided
+if(AMD_CONFIG AND NOT AMD_CONFIG MATCHES "^(zen|zen2|zen3|zen4|zen5|amdzen)$")
+    message(FATAL_ERROR "Invalid AMD_CONFIG value: ${AMD_CONFIG}. Supported values: zen, zen2, zen3, zen4, zen5, amdzen")
+endif()
+
+# Set AOCL-BLAS configuration family based on AMD_CONFIG
+if(AMD_CONFIG)
+    set(BLIS_CONFIG_FAMILY "${AMD_CONFIG}" CACHE STRING "Blis configuration family" FORCE)
+    message(STATUS "BLIS_CONFIG_FAMILY set to: ${AMD_CONFIG}")
+else()
+    set(BLIS_CONFIG_FAMILY "amdzen" CACHE STRING "Blis configuration family")
+    message(STATUS "BLIS_CONFIG_FAMILY set to default: amdzen")
+endif()
+
+# Set AOCL-LAPACK ISA configuration based on AMD_CONFIG
+if(AMD_CONFIG STREQUAL "zen" OR AMD_CONFIG STREQUAL "zen2" OR AMD_CONFIG STREQUAL "zen3")
+    set(LF_ISA_CONFIG "AVX2-STRICT" CACHE STRING "LibFlame ISA configuration" FORCE)
+    message(STATUS "LF_ISA_CONFIG set to: AVX2-STRICT (based on AMD_CONFIG=${AMD_CONFIG})")
+elseif(AMD_CONFIG STREQUAL "zen4" OR AMD_CONFIG STREQUAL "zen5")
+    set(LF_ISA_CONFIG "AVX512-STRICT" CACHE STRING "LibFlame ISA configuration" FORCE)
+    message(STATUS "LF_ISA_CONFIG set to: AVX512-STRICT (based on AMD_CONFIG=${AMD_CONFIG})")
+else()
+    set(LF_ISA_CONFIG "AVX2" CACHE STRING "LibFlame ISA configuration")
+    message(STATUS "LF_ISA_CONFIG set to default: AVX2")
+endif()
+
+# Set AOCL-LibM static dispatch option based on AMD_CONFIG
+if(AMD_CONFIG STREQUAL "zen")
+    set(ALM_STATIC_DISPATCH_OPTION "AVX2" CACHE STRING "LibFlame ISA configuration" FORCE)
+    message(STATUS "ALM_STATIC_DISPATCH_OPTION set to: AVX2 (based on AMD_CONFIG=${AMD_CONFIG})")
+elseif(AMD_CONFIG STREQUAL "zen2" OR AMD_CONFIG STREQUAL "zen3" OR AMD_CONFIG STREQUAL "zen4" OR AMD_CONFIG STREQUAL "zen5")
+    string(TOUPPER "${AMD_CONFIG}" ALM_DISPATCH_UPPER)
+    set(ALM_STATIC_DISPATCH_OPTION "${ALM_DISPATCH_UPPER}" CACHE STRING "LibM static dispatch option" FORCE)
+    message(STATUS "ALM_STATIC_DISPATCH_OPTION set to: ${ALM_DISPATCH_UPPER})")
+else()
+    set(ALM_STATIC_DISPATCH_OPTION "" CACHE STRING "LibM static dispatch option")
+    message(STATUS "ALM_STATIC_DISPATCH_OPTION set to default: (dynamic dispatch)")
+endif()
+
 set(ENABLE_ADDON "" CACHE STRING "Configure with specific addons using a ';'-separated list")
 
 # Set platform-specific options
