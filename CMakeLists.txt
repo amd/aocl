@@ -37,21 +37,44 @@ message("CMAKE_CONFIGURATION_TYPES: ${CMAKE_CONFIGURATION_TYPES}")
 message("CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 message("CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}")
 
-# Calculate approximately 50% of the available CPU cores on the build machine
+# Configure parallel build cores
+# User can specify BUILD_CORES, otherwise defaults to 50% of available CPU cores
 # to use with the -j option for parallel builds, balancing performance and memory usage.
-# Detect number of available processors
+set(BUILD_CORES "" CACHE STRING "Number of cores for parallel build (empty for auto: 50% of available cores)")
+
 if(UNIX)
+    # Detect total number of available processors
     execute_process(COMMAND nproc
                     OUTPUT_VARIABLE NUM_CORES
                     OUTPUT_STRIP_TRAILING_WHITESPACE)
-    # Calculate 50% of cores (round up to at least 1)
-    math(EXPR BUILD_CORES "(${NUM_CORES} + 1) / 2")  # +1 ensures rounding up
-
-    # Message for debug/logging
-    message(STATUS "Using ${BUILD_CORES} cores for parallel build out of ${NUM_CORES} available.")
+    
+    # Use user-specified cores if provided, otherwise calculate 50% of available cores
+    if(BUILD_CORES STREQUAL "")
+        # Calculate 50% of cores (round up to at least 1)
+        math(EXPR BUILD_CORES "(${NUM_CORES} + 1) / 2")  # +1 ensures rounding up
+        message(STATUS "Using ${BUILD_CORES} cores for parallel build (auto: 50% of ${NUM_CORES} available cores)")
+    else()
+        # Validate user-provided BUILD_CORES
+        if(BUILD_CORES GREATER NUM_CORES)
+            message(WARNING "Requested ${BUILD_CORES} cores exceeds available ${NUM_CORES} cores. Using ${NUM_CORES} cores.")
+            set(BUILD_CORES ${NUM_CORES})
+        elseif(BUILD_CORES LESS 1)
+            message(WARNING "BUILD_CORES must be at least 1. Using 1 core.")
+            set(BUILD_CORES 1)
+        endif()
+        message(STATUS "Using ${BUILD_CORES} cores for parallel build (user-specified)")
+    endif()
+    
     set(parallel "-j${BUILD_CORES}")
 else()
-    set(parallel "-j")
+    # Windows: use BUILD_CORES if specified, otherwise use all cores
+    if(NOT BUILD_CORES STREQUAL "")
+        set(parallel "-j${BUILD_CORES}")
+        message(STATUS "Using ${BUILD_CORES} cores for parallel build (user-specified)")
+    else()
+        set(parallel "-j")
+        message(STATUS "Using all available cores for parallel build")
+    endif()
 endif()
 
 # Define build options
@@ -73,6 +96,19 @@ option(ENABLE_TRSM_PREINVERSION "Check if we need to enable trsm preinversion" O
 option(ENABLE_ILP64 "Check if we need to enable ILP64" OFF)
 option(ENABLE_BLAS_EXT_GEMMT "Check if we need to enable blas external gemmt for AOCL-LAPACK library build" ON)
 option(ENABLE_AOCL_BLAS "Check if we need to tightly coupled with AOCL-BLAS library for AOCL-LAPACK library build" OFF)
+option(ENABLE_TESTS "Enable building and running library functionality tests" OFF)
+option(USE_SOURCES_FROM_SUBMODULES "Enable building and testing libraries using sources from submodules" ON)
+
+# Set library source paths based on USE_SOURCES_FROM_SUBMODULES option
+if(USE_SOURCES_FROM_SUBMODULES)
+    message(STATUS "Using sources from submodules")
+    set(SUBMODULES_BASE_PATH "${CMAKE_SOURCE_DIR}/submodules")
+    
+    # Set all library paths using a loop for cleaner code
+    foreach(LIB_VAR UTILS BLAS LAPACK SPARSE CRYPTO LIBM COMPRESSION DA LIBMEM)
+        set(${LIB_VAR}_PATH "${SUBMODULES_BASE_PATH}")
+    endforeach()
+endif()
 
 # Set build static libs option based on shared libs option
 if(BUILD_SHARED_LIBS)
@@ -376,3 +412,148 @@ install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
         ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
         RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
         )
+
+# === SYMBOL RENAMING INTEGRATION ===
+# Single variable to control symbol renaming: if empty, renaming is disabled
+# If set to a prefix (e.g., "AOCL_"), renaming is enabled with that prefix
+set(SYMBOL_RENAME_PREFIX "" CACHE STRING "Prefix for symbol renaming (empty to disable)")
+
+# Function to create symbol renaming target
+function(add_symbol_renaming_target)
+    if(SYMBOL_RENAME_PREFIX)
+        # Find Python interpreter
+        find_package(Python3 COMPONENTS Interpreter REQUIRED)
+        
+        # Determine the installation package path
+        set(INSTALL_PACKAGE_PATH "${CMAKE_INSTALL_PREFIX}")
+        
+        # Determine additional libraries needed for shared library creation
+        set(SO_ADDITIONAL_LIBS "-lstdc++ -lpthread")
+        if(ENABLE_AOCL_LAPACK OR ENABLE_AOCL_BLAS OR ENABLE_AOCL_DA)
+            set(SO_ADDITIONAL_LIBS "${SO_ADDITIONAL_LIBS} -lgfortran -lquadmath")
+        endif()
+        
+        # Handle OpenMP flags properly based on configuration
+        if(ENABLE_MULTITHREADING)
+            if(OpenMP_libomp_LIBRARY AND EXISTS "${OpenMP_libomp_LIBRARY}")
+                # Use explicit OpenMP library path provided by user
+                set(SO_ADDITIONAL_LIBS "${SO_ADDITIONAL_LIBS} ${OpenMP_libomp_LIBRARY}")
+            elseif(OpenMP_C_FLAGS)
+                # Use OpenMP flags from find_package(OpenMP)
+                set(SO_ADDITIONAL_LIBS "${SO_ADDITIONAL_LIBS} ${OpenMP_C_FLAGS}")
+            else()
+                # Fallback to -fopenmp (libgomp for GCC and libomp for AOCC/Clang)
+                set(SO_ADDITIONAL_LIBS "${SO_ADDITIONAL_LIBS} -fopenmp")
+            endif()
+        endif()
+        
+        # Create optional custom target for symbol renaming (only runs when explicitly called)
+        if(BUILD_SHARED_LIBS)
+            add_custom_target(rename_symbols
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/rename_symbols.py 
+                        ${INSTALL_PACKAGE_PATH} ${SYMBOL_RENAME_PREFIX}
+                        --create-so --so-libs '${SO_ADDITIONAL_LIBS}'
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                COMMENT "Symbol renaming in AOCL libraries with ${SYMBOL_RENAME_PREFIX} prefix and shared library creation (run after install)"
+                VERBATIM
+            )
+            set(RENAME_MODE_MSG "Renaming symbols in static library and creating shared library using renamed static library")
+        else()
+            add_custom_target(rename_symbols
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/rename_symbols.py 
+                        ${INSTALL_PACKAGE_PATH} ${SYMBOL_RENAME_PREFIX}
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                COMMENT "Symbol renaming in AOCL static library with ${SYMBOL_RENAME_PREFIX} prefix (run after install)"
+                VERBATIM
+            )
+            set(RENAME_MODE_MSG "Renaming symbols in static library only")
+        endif()
+        
+        # Create post-install custom command that runs after installation
+        install(CODE "
+            message(STATUS \"Running symbol renaming post-install...\")
+            message(STATUS \"Mode: ${RENAME_MODE_MSG}\")
+            
+            # Verify installation directory exists and has proper structure
+            if(NOT EXISTS \"${CMAKE_INSTALL_PREFIX}/lib\")
+                message(FATAL_ERROR \"Installation directory structure incomplete: ${CMAKE_INSTALL_PREFIX}/lib not found\")
+            endif()
+            
+            # Check if Python is available
+            find_program(PYTHON_EXECUTABLE python3 python)
+            if(NOT PYTHON_EXECUTABLE)
+                message(WARNING \"Python not found. Skipping symbol renaming.\")
+                return()
+            endif()
+            
+            # Check if rename_symbols.py exists
+            set(RENAME_SCRIPT \"${CMAKE_SOURCE_DIR}/rename_symbols.py\")
+            if(NOT EXISTS \"\${RENAME_SCRIPT}\")
+                message(WARNING \"Symbol renaming script not found: \${RENAME_SCRIPT}\")
+                message(STATUS \"Skipping symbol renaming.\")
+                return()
+            endif()
+            
+            # Run the symbol renaming script with appropriate options
+            if(\"${BUILD_SHARED_LIBS}\" STREQUAL \"ON\")
+                message(STATUS \"Executing: \${PYTHON_EXECUTABLE} \${RENAME_SCRIPT} ${CMAKE_INSTALL_PREFIX} ${SYMBOL_RENAME_PREFIX} --create-so --so-libs ${SO_ADDITIONAL_LIBS} --compiler ${CMAKE_C_COMPILER} --linker-flags \\\"${CMAKE_SHARED_LINKER_FLAGS}\\\"\")
+                execute_process(
+                    COMMAND \${PYTHON_EXECUTABLE} \${RENAME_SCRIPT} ${CMAKE_INSTALL_PREFIX} ${SYMBOL_RENAME_PREFIX} --create-so --so-libs ${SO_ADDITIONAL_LIBS} --compiler ${CMAKE_C_COMPILER} --linker-flags \"${CMAKE_SHARED_LINKER_FLAGS}\"
+                    WORKING_DIRECTORY \"${CMAKE_SOURCE_DIR}\"
+                    RESULT_VARIABLE RENAME_RESULT
+                    OUTPUT_VARIABLE RENAME_OUTPUT
+                    ERROR_VARIABLE RENAME_ERROR
+                )
+            else()
+                message(STATUS \"Executing: \${PYTHON_EXECUTABLE} \${RENAME_SCRIPT} ${CMAKE_INSTALL_PREFIX} ${SYMBOL_RENAME_PREFIX}\")
+                execute_process(
+                    COMMAND \${PYTHON_EXECUTABLE} \${RENAME_SCRIPT} ${CMAKE_INSTALL_PREFIX} ${SYMBOL_RENAME_PREFIX}
+                    WORKING_DIRECTORY \"${CMAKE_SOURCE_DIR}\"
+                    RESULT_VARIABLE RENAME_RESULT
+                    OUTPUT_VARIABLE RENAME_OUTPUT
+                    ERROR_VARIABLE RENAME_ERROR
+                )
+            endif()
+            
+            # Check if renaming was successful
+            if(RENAME_RESULT EQUAL 0)
+                message(STATUS \"Symbol renaming completed successfully!\")
+                message(STATUS \"Original libraries preserved in: ${CMAKE_INSTALL_PREFIX}/lib\")
+                message(STATUS \"Renamed libraries created in: ${CMAKE_INSTALL_PREFIX}/renamed/lib\")
+                if(EXISTS \"${CMAKE_INSTALL_PREFIX}/renamed/include\")
+                    message(STATUS \"Renamed headers created in: ${CMAKE_INSTALL_PREFIX}/renamed/include\")
+                endif()
+                if(\"${BUILD_SHARED_LIBS}\" STREQUAL \"ON\")
+                    message(STATUS \"Created shared libraries from renamed static libraries\")
+                endif()
+                message(STATUS \"All renamed symbols now have ${SYMBOL_RENAME_PREFIX} prefix\")
+            else()
+                message(STATUS \"Symbol renaming failed with exit code: \${RENAME_RESULT}\")
+                if(RENAME_ERROR)
+                    message(STATUS \"Error: \${RENAME_ERROR}\")
+                endif()
+                if(RENAME_OUTPUT)
+                    message(STATUS \"Output: \${RENAME_OUTPUT}\")
+                endif()
+                message(STATUS \"You can manually run symbol renaming after build:\")
+                if(\"${BUILD_SHARED_LIBS}\" STREQUAL \"ON\")
+                    message(STATUS \"  python3 ${CMAKE_SOURCE_DIR}/rename_symbols.py ${CMAKE_INSTALL_PREFIX} ${SYMBOL_RENAME_PREFIX} --create-so --so-libs '${SO_ADDITIONAL_LIBS}' --compiler ${CMAKE_C_COMPILER} --linker-flags '${CMAKE_SHARED_LINKER_FLAGS}'\")
+                else()
+                    message(STATUS \"  python3 ${CMAKE_SOURCE_DIR}/rename_symbols.py ${CMAKE_INSTALL_PREFIX} ${SYMBOL_RENAME_PREFIX}\")
+                endif()
+            endif()
+        ")
+    else()
+        message(STATUS "Symbol renaming is disabled. To enable, use: -DSYMBOL_RENAME_PREFIX=<prefix>")
+        message(STATUS "  Example: -DSYMBOL_RENAME_PREFIX=AOCL_ or -DSYMBOL_RENAME_PREFIX=AOCL51_ etc.")
+    endif()
+endfunction()
+
+# Call the function to set up symbol renaming
+add_symbol_renaming_target()
+
+# Add test subdirectory if tests are enabled
+if(ENABLE_TESTS)
+    enable_testing()
+    add_subdirectory(test)
+endif()
