@@ -18,9 +18,9 @@ endif()
 
 # Set the build type
 if(NOT DEFINED CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type" FORCE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 elseif(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type" FORCE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 endif()
 
 # Set the installation prefix
@@ -54,14 +54,6 @@ if(UNIX)
         math(EXPR BUILD_CORES "(${NUM_CORES} + 1) / 2")  # +1 ensures rounding up
         message(STATUS "Using ${BUILD_CORES} cores for parallel build (auto: 50% of ${NUM_CORES} available cores)")
     else()
-        # Validate user-provided BUILD_CORES
-        if(BUILD_CORES GREATER NUM_CORES)
-            message(WARNING "Requested ${BUILD_CORES} cores exceeds available ${NUM_CORES} cores. Using ${NUM_CORES} cores.")
-            set(BUILD_CORES ${NUM_CORES})
-        elseif(BUILD_CORES LESS 1)
-            message(WARNING "BUILD_CORES must be at least 1. Using 1 core.")
-            set(BUILD_CORES 1)
-        endif()
         message(STATUS "Using ${BUILD_CORES} cores for parallel build (user-specified)")
     endif()
     
@@ -417,6 +409,15 @@ install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
 # Single variable to control symbol renaming: if empty, renaming is disabled
 # If set to a prefix (e.g., "AOCL_"), renaming is enabled with that prefix
 set(SYMBOL_RENAME_PREFIX "" CACHE STRING "Prefix for symbol renaming (empty to disable)")
+
+# Check if LibMem is enabled - symbol renaming is incompatible with LibMem
+# LibMem uses IFUNC (indirect functions) that must retain standard C library names (memcpy, memset, etc.)
+if(ENABLE_AOCL_LIBMEM AND SYMBOL_RENAME_PREFIX)
+    message(FATAL_ERROR "Symbol renaming is not compatible with AOCL-LibMem. "
+                        "LibMem uses IFUNC symbols that must retain standard C library names. "
+                        "Please either disable LibMem (ENABLE_AOCL_LIBMEM=OFF) or "
+                        "disable symbol renaming (SYMBOL_RENAME_PREFIX=\"\").")
+endif()
 
 # Function to create symbol renaming target
 function(add_symbol_renaming_target)
