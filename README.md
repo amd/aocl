@@ -48,6 +48,7 @@ build and work with the complete AOCL ecosystem without external dependencies.
   - [CMake Variables Reference](#cmake-variables-reference)
     - [CMake Options to Select Libraries](#cmake-options-to-select-libraries)
     - [CMake Options for AMD Architecture-Specific Optimizations](#cmake-options-for-amd-architecture-specific-optimizations)
+    - [CMake Options for Build Performance](#cmake-options-for-build-performance)
     - [CMake Options to Set Library Source Path](#cMake-options-to-set-library-source-path)
 
 ## Project Structure
@@ -679,6 +680,38 @@ $ cmake --preset aocl-linux-make-lp-ga-gcc-config -DAMD_CONFIG=zen2 --fresh
 # Build with generic AMD optimizations (dynamic dispatch)
 $ cmake --preset aocl-linux-make-lp-ga-gcc-config -DAMD_CONFIG=amdzen --fresh
 ```
+
+### CMake Options for Build Performance
+
+The following table lists the CMake variable used to control parallel build performance.
+
+| CMake Variable or Option  | Usage |
+|---------------------------|---------------------------------------------------------------|
+| **BUILD_CORES**           | `-DBUILD_CORES=<number>` to specify the number of CPU cores to use for parallel builds. If not specified (empty), automatically uses 50% of available cores to balance performance and memory usage. |
+
+**BUILD_CORES Usage:**
+
+- **Auto (Default)**: If `BUILD_CORES` is not specified or empty, the build system automatically detects available CPU cores and uses 50% of them for parallel compilation. This prevents memory exhaustion on systems with many cores.
+- **User-Specified**: Provide an exact number to use a specific core count (e.g., `-DBUILD_CORES=8`).
+- **Validation**: The system validates that the specified number doesn't exceed available cores and is at least 1.
+
+**Examples:**
+
+```bash
+# Use default (50% of available cores)
+$ cmake --preset aocl-linux-make-lp-ga-gcc-config --fresh
+
+# Use 8 cores for compilation
+$ cmake --preset aocl-linux-make-lp-ga-gcc-config -DBUILD_CORES=8 --fresh
+
+# Use all available cores (assumes 16 cores available)
+$ cmake --preset aocl-linux-make-lp-ga-gcc-config -DBUILD_CORES=16 --fresh
+
+# Use single core (for debugging or low-memory systems)
+$ cmake --preset aocl-linux-make-lp-ga-gcc-config -DBUILD_CORES=1 --fresh
+```
+
+**Note:** This option is particularly useful on high-core-count systems where using all cores simultaneously may cause memory issues during compilation of large libraries.
 
 
 ### CMake Options to Set Library Source Path
