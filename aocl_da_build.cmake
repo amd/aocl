@@ -24,7 +24,7 @@ endif()
 if(DA_PATH)
     message(STATUS "Using AOCL-DA source code from ${DA_PATH}.")
     file(APPEND "${DA_BUILD_LOG_FILE_PATH}" "Using AOCL-DA source code from ${DA_PATH}.\n")
-    string(REPLACE "\\" "/" DA_DIR "${DA_PATH}/aocl-da")
+    string(REPLACE "\\" "/" DA_DIR "${DA_PATH}/aocl-data-analytics")
 else()
     execute_process(
         COMMAND git clone ${DA_GIT_REPOSITORY} -b ${DA_GIT_TAG} aocl-data-analytics 
@@ -45,7 +45,7 @@ message(STATUS "DA_PATH: ${DA_DIR}.")
 file(APPEND "${DA_BUILD_LOG_FILE_PATH}" "DA_PATH: ${DA_DIR}.\n")
 
 # Log the start of the configuration and build process
-message(STATUS "\"The configuration and build process for the AOCL-BLAS library has started, and logs are being redirected to ${DA_BUILD_LOG_FILE_PATH}\"")
+message(STATUS "\"The configuration and build process for the AOCL-DA library has started, and logs are being redirected to ${DA_BUILD_LOG_FILE_PATH}\"")
 
 # Determine the compiler toolset based on the generator
 string(FIND "${CMAKE_GENERATOR}" "Visual Studio" substring_position)

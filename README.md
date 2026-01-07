@@ -40,6 +40,11 @@ build and work with the complete AOCL ecosystem without external dependencies.
       - [Multi-Thread AOCL](#multi-thread-aocl)
     - [On Windows](#on-windows)
   - [Verifying AOCL Installation](#verifying-aocl-installation)
+  - [Testing](#testing)
+  - [Symbol Renaming Feature](#symbol-renaming-feature)
+    - [Overview](#overview)
+    - [Usage](#usage)
+    - [Examples](#examples)
   - [CMake Variables Reference](#cmake-variables-reference)
     - [CMake Options to Select Libraries](#cmake-options-to-select-libraries)
     - [CMake Options for AMD Architecture-Specific Optimizations](#cmake-options-for-amd-architecture-specific-optimizations)
@@ -63,8 +68,13 @@ The project is structured as follows:
 - `LICENSE.txt`: This is consolidated LICENSE file.
 - `NOTICES.txt`: This is Third-Party Notices file.
 - `README.md`: This README file.
+- `commands.txt`: Build and test commands for symbol renaming feature.
+- `rename_symbols.py`: Python script for renaming library symbols with custom prefix.
 - `presets/`: Directory containing preset configurations for different platforms.
 - `submodules/`: Directory containing AOCL library sources as git submodules.
+- `test/`: Directory containing test code for validating library functionality.
+  - `CMakeLists.txt`: CMake configuration for building test executables.
+  - `test_aocl_symbols.c`: Test program to validate both original and renamed symbols.
 
 ## Working with AOCL Library Sources via Git Submodules
 
@@ -501,6 +511,113 @@ There are two subfolders within the `install_package` folder: `lib` and
 -   The `lib` folder contains the compiled binaries:
     -   On Linux: `libaocl.so` and `libaocl.a`.
     -   On Windows: `aocl.dll` and `aocl.lib`.
+
+## Testing
+
+The AOCL Build-It-Yourself project includes comprehensive test executables to validate library functionality. 
+Tests can be enabled by setting `-DENABLE_TESTS=ON` during CMake configuration.
+
+**Build with Tests:**
+```bash
+cmake --preset aocl-linux-make-lp-ga-gcc-config \
+  -DENABLE_TESTS=ON
+
+cd build
+cmake --build . --target install -j 10
+cmake --build . --target test_original_symbols -j 10
+./test/test_original_symbols
+```
+
+**Test Coverage:**
+- 75 test functions covering 9 AOCL libraries
+- Tests include: BLAS, LAPACK, Sparse, LibM, Crypto, Compression, Data Analytics, LibMem, Utils
+- Validates library functionality and API correctness
+
+**Symbol Renaming Tests:**
+
+When symbol renaming is enabled (with `-DSYMBOL_RENAME_PREFIX=<prefix>`), an additional test executable 
+`test_renamed_symbols` (executable) is built to validate renamed symbols:
+
+```bash
+cmake --preset aocl-linux-make-lp-ga-gcc-config \
+  -DENABLE_TESTS=ON \
+  -DSYMBOL_RENAME_PREFIX=AOCL_
+
+cd build
+cmake --build . --target install -j 10
+cmake --build . --target test_original_symbols test_renamed_symbols -j 10
+./test/test_original_symbols      # Tests original symbols
+./test/test_renamed_symbols       # Tests renamed symbols with prefix
+```
+
+**Note:** When symbol renaming is disabled, only `test_original_symbols` executable is built. When enabled, both 
+`test_original_symbols` and `test_renamed_symbols` (executable) executables are built simultaneously.
+
+For detailed build commands and troubleshooting, see `commands.txt` in the project root.
+
+## Symbol Renaming Feature
+
+### Overview
+
+AOCL Build-It-Yourself now supports automatic symbol renaming with custom prefixes. This feature allows multiple versions 
+of AOCL libraries to coexist in the same application or system without symbol conflicts. For example, you can have both 
+AOCL 5.1 and AOCL 5.2 installed simultaneously by using different prefixes (e.g., `AOCL51_` and `AOCL52_`).
+
+**Key Features:**
+- **Custom Prefix**: Add any prefix to all exported symbols (e.g., `AOCL_`, `AOCL51_`, `MYLIB_`)
+- **Case-Aware Renaming**: Automatically applies correct case for different symbol types
+  - Symbols beginning with uppercase letters (e.g., `DGEMM_` → `AOCL_DGEMM_`, `LAPACKE_dgetrf` → `AOCL_LAPACKE_dgetrf`)
+  - Symbols beginning with lowercase letters (e.g., `cblas_dgemm` → `aocl_cblas_dgemm`)
+- **Automatic Process**: Symbol renaming happens automatically during installation
+- **Testing Support**: Built-in test executables to validate both original and renamed symbols
+
+### Usage
+
+To enable symbol renaming, add the `-DSYMBOL_RENAME_PREFIX=<prefix>` option when configuring CMake:
+
+```bash
+cmake --preset aocl-linux-make-lp-ga-gcc-config \
+  -DENABLE_TESTS=ON \
+  -DSYMBOL_RENAME_PREFIX=AOCL_
+```
+
+**Configuration Options:**
+- **With Symbol Renaming**: `-DSYMBOL_RENAME_PREFIX=AOCL_` (or any custom prefix)
+- **Without Symbol Renaming**: Omit the option or use `-DSYMBOL_RENAME_PREFIX=""`
+
+**Build Process:**
+```bash
+cd build
+cmake --build . --target install -j 10
+```
+
+**Installation Structure:**
+- Original libraries: `install_package/lib/`
+- Renamed libraries: `install_package/renamed/lib/`
+
+### Examples
+
+**1. Default AOCL_ Prefix:**
+```bash
+cmake --preset aocl-linux-make-lp-ga-gcc-config -DSYMBOL_RENAME_PREFIX=AOCL_
+```
+Result: `DGEMM_` → `AOCL_DGEMM_`, `cblas_dgemm` → `aocl_cblas_dgemm`
+
+**2. Multi-Version Deployment:**
+```bash
+# Build AOCL 5.1 with prefix
+cmake -DSYMBOL_RENAME_PREFIX=AOCL51_ ...
+
+# Build AOCL 5.2 with different prefix
+cmake -DSYMBOL_RENAME_PREFIX=AOCL52_ ...
+```
+Result: Both versions can coexist in the same application
+
+**3. Custom Company Prefix:**
+```bash
+cmake --preset aocl-linux-make-lp-ga-gcc-config -DSYMBOL_RENAME_PREFIX=MYCOMPANY_
+```
+Result: `DGEMM_` → `MYCOMPANY_DGEMM_`, `cblas_dgemm` → `mycompany_cblas_dgemm`
 
 ## CMake Variables Reference
 
