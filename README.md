@@ -334,8 +334,8 @@ customization based on specific requirements.
     multithreaded library. It can be customized to build static or
     single-threaded libraries by modifying the relevant CMake variables.
 
-    -   **CMAKE_BUILD_TYPE**: `Release` Specifies that the build should
-        be optimized for performance.
+    -   **CMAKE_BUILD_TYPE**: `Release` (default) Specifies that the build
+        is optimized for performance.
     -   **BUILD_SHARED_LIBS**: `ON` Indicates that shared libraries are
         built by default.
     -   **ENABLE_ILP64**: `OFF` Configures the build to use the LP64
@@ -574,6 +574,11 @@ AOCL 5.1 and AOCL 5.2 installed simultaneously by using different prefixes (e.g.
 
 ### Usage
 
+**Important:** Symbol renaming is **not compatible with AOCL-LibMem**. LibMem uses IFUNC (indirect functions) 
+for runtime CPU dispatch, which requires standard C library names (memcpy, memset, etc.) and cannot be renamed. 
+If you enable both LibMem and symbol renaming, the build will fail with an error. To use symbol renaming, 
+set `-DENABLE_AOCL_LIBMEM=OFF`.
+
 To enable symbol renaming, add the `-DSYMBOL_RENAME_PREFIX=<prefix>` option when configuring CMake:
 
 ```bash
@@ -692,8 +697,7 @@ The following table lists the CMake variable used to control parallel build perf
 **BUILD_CORES Usage:**
 
 - **Auto (Default)**: If `BUILD_CORES` is not specified or empty, the build system automatically detects available CPU cores and uses 50% of them for parallel compilation. This prevents memory exhaustion on systems with many cores.
-- **User-Specified**: Provide an exact number to use a specific core count (e.g., `-DBUILD_CORES=8`).
-- **Validation**: The system validates that the specified number doesn't exceed available cores and is at least 1.
+- **User-Specified**: Provide an exact number to use a specific core count (e.g., `-DBUILD_CORES=8`). The build system (make) will handle any invalid values appropriately.
 
 **Examples:**
 
