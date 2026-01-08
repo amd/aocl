@@ -650,6 +650,14 @@ individual AOCL libraries.
 | **ENABLE_AOCL_DA**        | `-DENABLE_AOCL_DA=OFF` (default) or `-DENABLE_AOCL_DA=ON` to include in the library. |
 | **ENABLE_AOCL_LIBMEM**    | `-DENABLE_AOCL_LIBMEM=OFF` (default) or `-DENABLE_AOCL_LIBMEM=ON` to include in the library. |
 
+### CMake Options for Library Configuration
+
+The following table lists additional CMake variables used to configure how selected AOCL libraries integrate and interact with each other.
+
+| CMake Variable or Option  | Usage |
+|---------------------------|---------------------------------------------------------------|
+| **ENABLE_AOCL_LAPACK_BLAS_COUPLING**      | `-DENABLE_AOCL_LAPACK_BLAS_COUPLING=OFF` (default) or `-DENABLE_AOCL_LAPACK_BLAS_COUPLING=ON` to enable tight coupling between AOCL-LAPACK and AOCL-BLAS library. This option controls whether AOCL-LAPACK should be tightly integrated with AOCL-BLAS implementation. **Note:** This is different from `ENABLE_AOCL_BLAS`, which controls whether to include AOCL-BLAS into the unified library. |
+
 ### CMake Options for AMD Architecture-Specific Optimizations
 
 The following table lists the CMake variable used to enable ISA-specific optimizations for AMD processors.
