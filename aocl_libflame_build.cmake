@@ -56,9 +56,9 @@ else()
 endif()
 
 # Set AOCL_ROOT and ENABLE_AOCL_BLAS options
-if(ENABLE_AOCL_BLAS)
+if(ENABLE_AOCL_LAPACK_BLAS_COUPLING)
     set(AOCL_BLAS_OPTIONS 
-        -DENABLE_AOCL_BLAS=${ENABLE_AOCL_BLAS} 
+        -DENABLE_AOCL_BLAS=${ENABLE_AOCL_LAPACK_BLAS_COUPLING} 
         -DAOCL_ROOT=${CMAKE_BINARY_DIR}/blis/install_package
     )
 endif()

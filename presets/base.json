@@ -117,7 +117,7 @@
       "name": "enable_aocl_blas",
       "hidden": true,
       "cacheVariables": {
-        "ENABLE_AOCL_BLAS": "ON"
+        "ENABLE_AOCL_LAPACK_BLAS_COUPLING": "ON"
       }
     },
     {
