@@ -101,7 +101,7 @@ def get_intelligent_prefix(symbol_name, base_prefix):
     
     Args:
         symbol_name (str): The original symbol name
-        base_prefix (str): The base prefix (e.g., "AOCL_")
+        base_prefix (str): The base prefix (e.g., "AOCL_" or "xyz")
     
     Returns:
         str: Appropriate prefix based on symbol case pattern
@@ -109,20 +109,27 @@ def get_intelligent_prefix(symbol_name, base_prefix):
     Examples:
         get_intelligent_prefix("cblas_dgemm", "AOCL_") -> "aocl_"
         get_intelligent_prefix("DGEMM_", "AOCL_") -> "AOCL_"
+        get_intelligent_prefix("cblas_dgemm", "xyz") -> "xyz"
+        get_intelligent_prefix("DGEMM_", "xyz") -> "XYZ"
         get_intelligent_prefix("CblasNoTrans", "AOCL_") -> "AOCL_"
         get_intelligent_prefix("LAPACKE_dgetrf", "AOCL_") -> "AOCL_"
         get_intelligent_prefix("_example_api", "AOCL_") -> "_aocl_"
+    
+    Note:
+        If base_prefix ends with underscore (e.g., "AOCL_"), it will be preserved in the output.
+        If base_prefix does not end with underscore (e.g., "xyz"), no underscore is added.
     """
     if not symbol_name or len(symbol_name) == 0:
         return base_prefix
     
-    # Remove trailing underscore from base_prefix for analysis
+    # Check if the base prefix has a trailing underscore
+    has_trailing_underscore = base_prefix.endswith('_')
     clean_prefix = base_prefix.rstrip('_')
     
     # Analyze symbol naming patterns
     # Pattern 0: Starts with underscore - preserve ALL leading underscores
-    # e.g., "_example_api" -> "_aocl_example_api" (Here aocl_ is a prefix)
-    # e.g., "__cpuid_1" -> "__aocl_cpuid_1" (Here aocl_ is a prefix)
+    # e.g., "_example_api" with "AOCL_" -> "_aocl_example_api"
+    # e.g., "_example_api" with "xyz" -> "_xyzexample_api"
     if symbol_name.startswith('_'):
         # Count and preserve ALL leading underscores
         leading_underscores = len(symbol_name) - len(symbol_name.lstrip('_'))
@@ -131,27 +138,32 @@ def get_intelligent_prefix(symbol_name, base_prefix):
         if not rest_of_symbol:
             return base_prefix
         
-        # Determine case pattern of the rest and add trailing underscore for separation
-        # Format: leading_underscores + prefix + underscore + rest_of_symbol
+        # Determine case pattern and apply prefix with appropriate case
         if rest_of_symbol.isupper():
-            return '_' * leading_underscores + clean_prefix.upper() + '_'
+            prefix = '_' * leading_underscores + clean_prefix.upper()
         elif rest_of_symbol.islower():
-            return '_' * leading_underscores + clean_prefix.lower() + '_'
+            prefix = '_' * leading_underscores + clean_prefix.lower()
         else:
-            return '_' * leading_underscores + clean_prefix.upper() + '_'
+            prefix = '_' * leading_underscores + clean_prefix.upper()
+        
+        # Add trailing underscore only if base_prefix had one
+        return prefix + '_' if has_trailing_underscore else prefix
     
     # Pattern 1: All uppercase (e.g., "DGEMM_", "SSYEV_")
     if symbol_name.isupper():
-        return clean_prefix.upper() + '_'
+        prefix = clean_prefix.upper()
+        return prefix + '_' if has_trailing_underscore else prefix
     
     # Pattern 2: All lowercase (e.g., "cblas_dgemm", "bli_dgemm")
     elif symbol_name.islower():
-        return clean_prefix.lower() + '_'
+        prefix = clean_prefix.lower()
+        return prefix + '_' if has_trailing_underscore else prefix
     
     # Pattern 3: Mixed-case (e.g., "CblasNoTrans", "LAPACKE_dgetrf", "getMaxValue")
     # Use uppercase prefix for all mixed-case symbols
     else:
-        return clean_prefix.upper() + '_'
+        prefix = clean_prefix.upper()
+        return prefix + '_' if has_trailing_underscore else prefix
 
 def analyze_symbol_case_patterns(symbols):
     """

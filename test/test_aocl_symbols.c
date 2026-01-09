@@ -148,11 +148,11 @@ extern size_t AMD_STRLEN(const char* s);
     #define AOCLSPARSE_CREATE_MAT_DESCR PREFIX_LOWER(aoclsparse_create_mat_descr)
     #define AOCLSPARSE_DESTROY_MAT_DESCR PREFIX_LOWER(aoclsparse_destroy_mat_descr)
     
-    // AOCL-LibM functions  
-    #define LIBM_SIN_FUNC PREFIX_LOWER(sin)
-    #define LIBM_COS_FUNC PREFIX_LOWER(cos)
-    #define LIBM_EXP_FUNC PREFIX_LOWER(exp)
-    #define LIBM_LOG_FUNC PREFIX_LOWER(log)
+    // AOCL-LibM functions (using amd_ prefix to test actual AOCL-LibM, not system libm)
+    #define LIBM_SIN_FUNC PREFIX_LOWER(amd_sin)
+    #define LIBM_COS_FUNC PREFIX_LOWER(amd_cos)
+    #define LIBM_EXP_FUNC PREFIX_LOWER(amd_exp)
+    #define LIBM_LOG_FUNC PREFIX_LOWER(amd_log)
     
     // AOCL-Compression functions (mixed-case symbols get uppercase prefix)
     #define AOCL_LLC_COMPRESS PREFIX_LOWER(aocl_llc_compress)
@@ -249,11 +249,11 @@ extern size_t AMD_STRLEN(const char* s);
     #define AOCLSPARSE_CREATE_MAT_DESCR aoclsparse_create_mat_descr
     #define AOCLSPARSE_DESTROY_MAT_DESCR aoclsparse_destroy_mat_descr
     
-    // AOCL-LibM functions
-    #define LIBM_SIN_FUNC sin
-    #define LIBM_COS_FUNC cos
-    #define LIBM_EXP_FUNC exp
-    #define LIBM_LOG_FUNC log
+    // AOCL-LibM functions (using amd_ prefix to test actual AOCL-LibM, not system libm)
+    #define LIBM_SIN_FUNC amd_sin
+    #define LIBM_COS_FUNC amd_cos
+    #define LIBM_EXP_FUNC amd_exp
+    #define LIBM_LOG_FUNC amd_log
     
     // AOCL-Compression functions
     #define AOCL_LLC_COMPRESS aocl_llc_compress
