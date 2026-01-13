@@ -269,13 +269,13 @@ extern size_t AMD_STRLEN(const char* s);
     #define ALCP_CIPHER_FINISH alcp_cipher_finish
     #define ALCP_IS_ERROR alcp_is_error
     
-    // AOCL-LibMem functions
-    #define AMD_MEMCPY amd_memcpy
-    #define AMD_MEMMOVE amd_memmove
-    #define AMD_MEMSET amd_memset
-    #define AMD_STRCPY amd_strcpy
-    #define AMD_STRCMP amd_strcmp
-    #define AMD_STRLEN amd_strlen
+    // AOCL-LibMem functions (uses IFUNC to replace standard C library functions)
+    #define AMD_MEMCPY memcpy
+    #define AMD_MEMMOVE memmove
+    #define AMD_MEMSET memset
+    #define AMD_STRCPY strcpy
+    #define AMD_STRCMP strcmp
+    #define AMD_STRLEN strlen
     
     // AOCL-DA functions
     #define DA_HANDLE_INIT_D da_handle_init_d
