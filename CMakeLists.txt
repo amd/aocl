@@ -416,7 +416,7 @@ if(ENABLE_AOCL_LIBMEM AND SYMBOL_RENAME_PREFIX)
     message(FATAL_ERROR "Symbol renaming is not compatible with AOCL-LibMem. "
                         "LibMem uses IFUNC symbols that must retain standard C library names. "
                         "Please either disable LibMem (ENABLE_AOCL_LIBMEM=OFF) or "
-                        "disable symbol renaming (SYMBOL_RENAME_PREFIX=\"\").")
+                        "disable symbol renaming by omitting the SYMBOL_RENAME_PREFIX option.")
 endif()
 
 # Function to create symbol renaming target

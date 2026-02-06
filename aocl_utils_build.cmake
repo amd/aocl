@@ -1,4 +1,4 @@
-# Copyright (C) 2025, Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2025-2026, Advanced Micro Devices, Inc. All rights reserved.
 
 # Set CMake policy
 cmake_policy(SET CMP0010 NEW)
@@ -57,6 +57,9 @@ else()
     set(CompilerToolSet "-T${CMAKE_GENERATOR_TOOLSET}")
 endif()
 
+# Log the configuration command
+file(APPEND "${UTILS_BUILD_LOG_FILE_PATH}" "CONFIGURATION COMMAND: cmake -G \"${CMAKE_GENERATOR}\" -S ${UTILS_DIR} -B ${CMAKE_BINARY_DIR}/aocl-utils/build_dir -DALCI_EXAMPLES=OFF -DCMAKE_CONFIGURATION_TYPES=${CMAKE_CONFIGURATION_TYPES} -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/aocl-utils/install_package ${CompilerToolSet}.\n")
+
 # Execute the configuration command
 execute_process(
     COMMAND cmake -G ${CMAKE_GENERATOR} -S ${UTILS_DIR} -B ${CMAKE_BINARY_DIR}/aocl-utils/build_dir -DALCI_EXAMPLES=OFF -DCMAKE_CONFIGURATION_TYPES=${CMAKE_CONFIGURATION_TYPES} -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/aocl-utils/install_package ${CompilerToolSet}
@@ -72,6 +75,9 @@ else()
     file(APPEND "${UTILS_BUILD_LOG_FILE_PATH}" "${error}.\n")
     message(FATAL_ERROR "Error occured while AOCL-Utils library configuration!!!.\n${error}\n")
 endif()
+
+# Log the build command
+file(APPEND "${UTILS_BUILD_LOG_FILE_PATH}" "BUILD COMMAND: cmake --build ${CMAKE_BINARY_DIR}/aocl-utils/build_dir --config ${CMAKE_BUILD_TYPE} --target install.\n")
 
 # Execute the build command
 execute_process(

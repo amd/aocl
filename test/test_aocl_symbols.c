@@ -1,4 +1,4 @@
-// Copyright (C) 2025, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (C) 2025-2026, Advanced Micro Devices, Inc. All rights reserved.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,8 +40,8 @@
 extern Uint64 ALCP_CIPHER_CONTEXT_SIZE(void);
 extern alc_error_t ALCP_CIPHER_REQUEST(alc_cipher_mode_t mode, alc_key_len_t keyLen, alc_cipher_handle_p handle);
 extern alc_error_t ALCP_CIPHER_INIT(alc_cipher_handle_p handle, const Uint8* key, Uint32 keyLen, const Uint8* iv, Uint32 ivLen);
-extern alc_error_t ALCP_CIPHER_ENCRYPT(alc_cipher_handle_p handle, const Uint8* plaintext, Uint8* ciphertext, Uint32 len);
-extern alc_error_t ALCP_CIPHER_DECRYPT(alc_cipher_handle_p handle, const Uint8* ciphertext, Uint8* plaintext, Uint32 len);
+extern alc_error_t ALCP_CIPHER_ENCRYPT(alc_cipher_handle_p handle, const Uint8* plaintext, Uint8* ciphertext, Uint64 len, Uint64* outlen);
+extern alc_error_t ALCP_CIPHER_DECRYPT(alc_cipher_handle_p handle, const Uint8* ciphertext, Uint8* plaintext, Uint64 len, Uint64* outlen);
 extern alc_error_t ALCP_CIPHER_FINISH(alc_cipher_handle_p handle);
 extern int ALCP_IS_ERROR(alc_error_t err);
 #endif
