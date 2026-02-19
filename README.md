@@ -680,6 +680,18 @@ The following table lists the CMake variable used to enable ISA-specific optimiz
   - `zen4` → Static dispatch with ZEN4
   - `zen5` → Static dispatch with ZEN5
   - Default: Dynamic dispatch (runtime detection)
+- **AOCL-DA**:
+    - `zen`, `zen2` → `znver2`
+    - `zen3` → `znver3`
+    - `zen4` → `znver4`
+    - `zen5` → `znver5`
+    - `amdzen` → `dynamic`
+    - Default: `dynamic`
+- **AOCL-Sparse**:
+    - `zen`, `zen2`, `zen3` → `OFF` (AVX512 code paths disabled at build time)
+    - `zen4`, `zen5`, `amdzen` → `ON` (AVX512 code paths enabled at build time)
+    - Default: `ON`
+    - Runtime dispatch remains automatic and can be guided using `AOCL_ENABLE_INSTRUCTIONS`
 
 **Examples:**
 
