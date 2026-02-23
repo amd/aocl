@@ -43,6 +43,7 @@ build and work with the complete AOCL ecosystem without external dependencies.
   - [Testing](#testing)
   - [Symbol Renaming Feature](#symbol-renaming-feature)
     - [Overview](#overview)
+      - [C++ Wrapper and Namespace Renaming](#c-wrapper-and-namespace-renaming)
     - [Usage](#usage)
     - [Examples](#examples)
   - [CMake Variables Reference](#cmake-variables-reference)
@@ -74,8 +75,10 @@ The project is structured as follows:
 - `presets/`: Directory containing preset configurations for different platforms.
 - `submodules/`: Directory containing AOCL library sources as git submodules.
 - `test/`: Directory containing test code for validating library functionality.
-  - `CMakeLists.txt`: CMake configuration for building test executables.
-  - `test_aocl_symbols.c`: Test program to validate both original and renamed symbols.
+- `test/CMakeLists.txt`: CMake configuration for building test executables.
+- `test/test_aocl_symbols.c`: Test program to validate both original and renamed symbols.
+- `test/test_aocl_cpp.cpp`: C++ test program for AOCL libraries (original + renamed symbol modes).
+- `test/test_rename_symbols_cpp.py`: Python unit tests for C/C++ symbol renaming logic (mangled names, namespace/wrapper/header rewrites).
 
 ## Working with AOCL Library Sources via Git Submodules
 
@@ -554,6 +557,12 @@ cmake --build . --target test_original_symbols test_renamed_symbols -j 10
 **Note:** When symbol renaming is disabled, only `test_original_symbols` executable is built. When enabled, both 
 `test_original_symbols` and `test_renamed_symbols` (executable) executables are built simultaneously.
 
+In addition to runtime tests, C++ symbol/header rewrite behavior is validated by unit tests in:
+
+- `test/test_rename_symbols_cpp.py`
+
+These tests verify C++ mangled symbol rewriting, namespace fallback updates, API family rewrite behavior, and C++ wrapper identifier renaming in generated headers.
+
 For detailed build commands and troubleshooting, see `commands.txt` in the project root.
 
 ## Symbol Renaming Feature
@@ -571,6 +580,29 @@ AOCL 5.1 and AOCL 5.2 installed simultaneously by using different prefixes (e.g.
   - Symbols beginning with lowercase letters (e.g., `cblas_dgemm` → `aocl_cblas_dgemm`)
 - **Automatic Process**: Symbol renaming happens automatically during installation
 - **Testing Support**: Built-in test executables to validate both original and renamed symbols
+
+### C++ Wrapper and Namespace Renaming
+
+Recent updates address C++ header-level renaming gaps that were not always covered by ELF symbol replacement alone.
+
+**What is now handled:**
+
+- C++ namespace fallback rewrites in wrapper headers:
+    - `namespace blis` → `<prefix>blis` (for example, `aocl_blis` with prefix `aocl_`, or `aoclblis` with prefix `aocl`)
+    - `namespace libflame` → `<prefix>libflame` (for example, `aocl_libflame` with prefix `aocl_`, or `aocllibflame` with prefix `aocl`)
+- C++ wrapper identifier rewrites in selected wrapper headers:
+    - `blis.hh` (for wrapper APIs such as `rotg`, `gemm`, etc.)
+    - `libflame_interface.hh` (for wrapper APIs such as `potrf`, `getrf`, etc.)
+- API-family header rewrites for declarations/wrappers not present as concrete ELF symbols:
+    - `cblas_*`, `lapacke_*`, `blis_*`, `bli_*`, `da_*`, `aoclsparse_*`
+
+**Safety rules applied during header rewrites:**
+
+- Function-like identifiers are rewritten only when they are callable tokens.
+- Type/callback-like identifiers (for example, DA callback typedef names such as `*_t_*`) are not rewritten.
+- `std::` and C++ ABI/runtime symbols are excluded from mangled-symbol renaming.
+- Mangled C++ prefix token preserves caller intent for trailing underscore (for example, prefix `aocl` produces `aoclfoo`, while `AOCL_` produces `AOCL_foo`).
+
 
 ### Usage
 
