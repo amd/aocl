@@ -1,7 +1,7 @@
 # Copyright (C) 2025-2026, Advanced Micro Devices, Inc. All rights reserved.
 
 cmake_minimum_required(VERSION 3.15)
-project(aocl_symbol_rename_test C Fortran)
+project(aocl_symbol_rename_test C CXX Fortran)
 
 # Check which AOCL libraries are enabled in the parent project
 set(ENABLED_LIBS "")
@@ -251,6 +251,131 @@ if(BUILD_RENAMED_TEST)
 endif()  # BUILD_RENAMED_TEST
 
 # ============================================================================
+# C++ Test Executable(s): AOCL-Utils / AOCL-Crypto / AOCL-DA
+# ============================================================================
+if(ENABLE_AOCL_UTILS OR ENABLE_AOCL_CRYPTO OR ENABLE_AOCL_DA)
+    add_executable(test_cpp_original_symbols EXCLUDE_FROM_ALL
+        test_aocl_cpp.cpp
+    )
+
+    add_dependencies(test_cpp_original_symbols aocl)
+
+    target_include_directories(test_cpp_original_symbols PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${AOCL_INSTALL_DIR}/include
+    )
+
+    target_compile_definitions(test_cpp_original_symbols PRIVATE
+        SYMBOL_PREFIX_STR=""
+    )
+
+    if(ENABLE_AOCL_UTILS)
+        target_compile_definitions(test_cpp_original_symbols PRIVATE ENABLE_UTILS)
+    endif()
+
+    if(ENABLE_AOCL_CRYPTO)
+        target_compile_definitions(test_cpp_original_symbols PRIVATE ENABLE_CRYPTO)
+    endif()
+
+    if(ENABLE_AOCL_DA)
+        target_compile_definitions(test_cpp_original_symbols PRIVATE ENABLE_DA)
+    endif()
+
+    target_link_libraries(test_cpp_original_symbols PRIVATE
+        ${AOCL_INSTALL_DIR}/lib/libaocl${AOCL_LIB_SUFFIX}
+        m
+        pthread
+        gfortran
+        quadmath
+        stdc++
+    )
+
+    if(ENABLE_AOCL_CRYPTO)
+        target_link_libraries(test_cpp_original_symbols PRIVATE
+            crypto
+            ssl
+        )
+    endif()
+
+    if(ENABLE_MULTITHREADING)
+        find_package(OpenMP)
+        if(OpenMP_CXX_FOUND)
+            target_link_libraries(test_cpp_original_symbols PRIVATE OpenMP::OpenMP_CXX)
+        endif()
+    endif()
+
+    set_target_properties(test_cpp_original_symbols PROPERTIES
+        CXX_STANDARD 17
+        CXX_STANDARD_REQUIRED ON
+        BUILD_RPATH "${AOCL_INSTALL_DIR}/lib"
+        INSTALL_RPATH "${AOCL_INSTALL_DIR}/lib"
+    )
+
+    if(BUILD_RENAMED_TEST)
+        add_executable(test_cpp_renamed_symbols EXCLUDE_FROM_ALL
+            test_aocl_cpp.cpp
+        )
+
+        add_dependencies(test_cpp_renamed_symbols aocl)
+
+        target_include_directories(test_cpp_renamed_symbols PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${AOCL_INSTALL_DIR}/renamed/include
+        )
+
+        target_compile_definitions(test_cpp_renamed_symbols PRIVATE
+            USE_RENAMED_SYMBOLS
+            SYMBOL_PREFIX_TOKEN_LOWER=${SYMBOL_PREFIX_LOWER}
+            SYMBOL_PREFIX_STR="${SYMBOL_PREFIX_LOWER}"
+        )
+
+        if(ENABLE_AOCL_UTILS)
+            target_compile_definitions(test_cpp_renamed_symbols PRIVATE ENABLE_UTILS)
+        endif()
+
+        if(ENABLE_AOCL_CRYPTO)
+            target_compile_definitions(test_cpp_renamed_symbols PRIVATE ENABLE_CRYPTO)
+        endif()
+
+        if(ENABLE_AOCL_DA)
+            target_compile_definitions(test_cpp_renamed_symbols PRIVATE ENABLE_DA)
+        endif()
+
+        target_link_libraries(test_cpp_renamed_symbols PRIVATE
+            ${AOCL_INSTALL_DIR}/renamed/lib/libaocl${AOCL_LIB_SUFFIX}
+            m
+            pthread
+            gfortran
+            quadmath
+            stdc++
+        )
+
+        if(ENABLE_AOCL_CRYPTO)
+            target_link_libraries(test_cpp_renamed_symbols PRIVATE
+                crypto
+                ssl
+            )
+        endif()
+
+        if(ENABLE_MULTITHREADING)
+            find_package(OpenMP)
+            if(OpenMP_CXX_FOUND)
+                target_link_libraries(test_cpp_renamed_symbols PRIVATE OpenMP::OpenMP_CXX)
+            endif()
+        endif()
+
+        set_target_properties(test_cpp_renamed_symbols PROPERTIES
+            CXX_STANDARD 17
+            CXX_STANDARD_REQUIRED ON
+            BUILD_RPATH "${AOCL_INSTALL_DIR}/renamed/lib"
+            INSTALL_RPATH "${AOCL_INSTALL_DIR}/renamed/lib"
+        )
+    endif()
+else()
+    message(STATUS "Skipping C++ tests: at least one of ENABLE_AOCL_UTILS, ENABLE_AOCL_CRYPTO, or ENABLE_AOCL_DA must be ON")
+endif()
+
+# ============================================================================
 # CTest Integration
 # ============================================================================
 add_test(NAME test_original_symbols
@@ -262,6 +387,31 @@ set_tests_properties(test_original_symbols PROPERTIES
     ENVIRONMENT "LD_LIBRARY_PATH=${AOCL_INSTALL_DIR}/lib:$ENV{LD_LIBRARY_PATH}"
 )
 
+if(TARGET test_cpp_original_symbols)
+    add_test(NAME test_cpp_original_symbols
+        COMMAND test_cpp_original_symbols
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
+
+    set_tests_properties(test_cpp_original_symbols PROPERTIES
+        ENVIRONMENT "LD_LIBRARY_PATH=${AOCL_INSTALL_DIR}/lib:$ENV{LD_LIBRARY_PATH}"
+    )
+endif()
+
+# Python unit tests for symbol renaming logic (C/C++ mangled handling)
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME test_rename_symbols_cpp
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                -s ${CMAKE_CURRENT_SOURCE_DIR}
+                -p test_rename_symbols_cpp.py
+                -v
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+else()
+    message(WARNING "Python3 interpreter not found. Skipping test_rename_symbols_cpp CTest hook.")
+endif()
+
 # Only add renamed symbols test if renaming is enabled
 if(BUILD_RENAMED_TEST)
     add_test(NAME test_renamed_symbols
@@ -272,6 +422,17 @@ if(BUILD_RENAMED_TEST)
     set_tests_properties(test_renamed_symbols PROPERTIES
         ENVIRONMENT "LD_LIBRARY_PATH=${AOCL_INSTALL_DIR}/renamed/lib:$ENV{LD_LIBRARY_PATH}"
     )
+
+    if(TARGET test_cpp_renamed_symbols)
+        add_test(NAME test_cpp_renamed_symbols
+            COMMAND test_cpp_renamed_symbols
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        )
+
+        set_tests_properties(test_cpp_renamed_symbols PROPERTIES
+            ENVIRONMENT "LD_LIBRARY_PATH=${AOCL_INSTALL_DIR}/renamed/lib:$ENV{LD_LIBRARY_PATH}"
+        )
+    endif()
 endif()
 
 

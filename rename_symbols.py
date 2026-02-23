@@ -12,10 +12,12 @@ Key Features:
 Intelligent Case-Aware Prefixing:
    - UPPERCASE symbols → UPPERCASE prefix (DGEMM_ → AOCL_DGEMM_)
    - lowercase symbols → lowercase prefix (cblas_dgemm → aocl_cblas_dgemm)
-   - Capitalized symbols → Capitalized prefix (CblasNoTrans → Aocl_CblasNoTrans)
+    - mixed-case symbols → UPPERCASE prefix (CblasNoTrans → AOCL_CblasNoTrans)
+    - leading underscores are preserved (_example_api → _aocl_example_api)
 
 Symbol Filtering:
-   - Preserves C++ mangled names from renaming
+    - Preserves C++ runtime/ABI and std:: symbols from renaming
+    - Renames non-std C++ mangled symbols by injecting namespace component safely
 
 Uses objcopy for symbol renaming and gcc as default compiler for creating shared libraries from renamed static libraries.
 """
@@ -57,6 +59,429 @@ ABI_EXCLUDES = [
     r'^__gmon_start__$',
 ]
 
+# Itanium C++ mangling helpers
+CV_REF_QUALIFIERS = set('rVKRO')
+
+def is_itanium_mangled_symbol(symbol):
+    """Return True if symbol appears to be an Itanium C++ mangled name."""
+    return symbol.startswith('_Z')
+
+def normalize_mangled_prefix_token(prefix):
+    """Normalize user prefix for C++ mangled first-component replacement.
+
+    Keeps case (important for user-requested branding like AOCL_52_) and strips
+    non-identifier characters.
+
+    The caller's trailing-underscore intent is preserved:
+      - prefix="AOCL_" -> token="AOCL_"
+      - prefix="aocl"  -> token="aocl"
+    """
+    token = re.sub(r'[^A-Za-z0-9_]', '', prefix)
+    if not token:
+        return ''
+    return token
+
+def _find_nested_name_index(symbol):
+    """Find the 'N' index of the primary nested-name encoding in a mangled symbol.
+
+    Returns:
+        int | None: index of 'N' if found, else None.
+    """
+    if not symbol.startswith('_Z'):
+        return None
+
+    # Most common function/type encodings.
+    if symbol.startswith('_ZN'):
+        return 2
+
+    # Local names containing nested entities (e.g., static locals in functions).
+    if symbol.startswith('_ZZN'):
+        return 3
+
+    # Special-name encodings with nested type names.
+    special_prefixes = (
+        '_ZTVN', '_ZTIN', '_ZTSN', '_ZTTN', '_ZTCN', '_ZGVN', '_ZGRN'
+    )
+    for pfx in special_prefixes:
+        if symbol.startswith(pfx):
+            return len(pfx) - 1
+
+    # Guard variable for local static with embedded encoding (_ZGVZ...).
+    if symbol.startswith('_ZGVZ'):
+        pos = symbol.find('N', 5)
+        if pos != -1:
+            return pos
+
+    # Thunk variants often include an underscore followed by a nested encoding.
+    # Examples: _ZThn16_N3foo3barEv, _ZTv0_n24_N3foo3barEv
+    if symbol.startswith(('_ZTh', '_ZTv', '_ZTc')):
+        pos = symbol.find('_N')
+        if pos != -1:
+            return pos + 1
+
+    return None
+
+def _is_std_at_nested_name(symbol, n_index):
+    """Check if a nested-name encoding starts with std:: (St abbreviation)."""
+    if n_index is None:
+        return False
+
+    i = n_index + 1
+    while i < len(symbol) and symbol[i] in CV_REF_QUALIFIERS:
+        i += 1
+    return symbol[i:i+2] == 'St'
+
+def _replace_first_nested_component(symbol, n_index, prefix_token):
+    """Replace first nested-name component with <prefix><orig_component>.
+
+    This preserves nesting depth and keeps Itanium back-references (e.g. NS0_)
+    aligned with the original substitution table.
+    """
+    if n_index is None:
+        return symbol
+
+    i = n_index + 1
+    while i < len(symbol) and symbol[i] in CV_REF_QUALIFIERS:
+        i += 1
+
+    # Parse first source-name <len><identifier> component.
+    j = i
+    while j < len(symbol) and symbol[j].isdigit():
+        j += 1
+    if j == i:
+        return symbol
+
+    name_len = int(symbol[i:j])
+    start = j
+    end = start + name_len
+    if end > len(symbol):
+        return symbol
+
+    first_component = symbol[start:end]
+    replaced_component = f"{prefix_token}{first_component}"
+
+    # Avoid duplicate replacement when already prefixed.
+    if first_component.startswith(prefix_token):
+        return symbol
+
+    encoded = f"{len(replaced_component)}{replaced_component}"
+    return symbol[:i] + encoded + symbol[end:]
+
+def _extract_first_nested_component(symbol):
+    """Extract first nested-name component from an Itanium mangled symbol."""
+    n_index = _find_nested_name_index(symbol)
+    if n_index is None:
+        return None
+
+    i = n_index + 1
+    while i < len(symbol) and symbol[i] in CV_REF_QUALIFIERS:
+        i += 1
+
+    j = i
+    while j < len(symbol) and symbol[j].isdigit():
+        j += 1
+    if j == i:
+        return None
+
+    name_len = int(symbol[i:j])
+    start = j
+    end = start + name_len
+    if end > len(symbol):
+        return None
+
+    return symbol[start:end]
+
+def build_namespace_rename_map(symbol_mapping):
+    """Build first-namespace identifier rename map from mangled symbol mapping.
+
+    Example:
+        _ZN4alcp5utils... -> _ZN12AOCL_52_alcp5utils...
+        yields {'alcp': 'AOCL_52_alcp'}
+    """
+    namespace_renames = {}
+
+    for old_name, new_name in symbol_mapping.items():
+        if not (is_itanium_mangled_symbol(old_name) and is_itanium_mangled_symbol(new_name)):
+            continue
+
+        old_ns = _extract_first_nested_component(old_name)
+        new_ns = _extract_first_nested_component(new_name)
+
+        if not old_ns or not new_ns or old_ns == new_ns:
+            continue
+
+        if old_ns in namespace_renames and namespace_renames[old_ns] != new_ns:
+            continue
+
+        namespace_renames[old_ns] = new_ns
+
+    return namespace_renames
+
+def apply_namespace_renames(content, namespace_renames):
+    """Apply C++ namespace identifier rewrites in headers.
+
+    This performs a mechanical first-identifier rename (e.g. alcp -> AOCL_52_alcp)
+    in common namespace contexts while avoiding partial identifier rewrites.
+    """
+    if not namespace_renames:
+        return content
+
+    updated = content
+    for old_ns, new_ns in sorted(namespace_renames.items(), key=lambda x: len(x[0]), reverse=True):
+        if old_ns == new_ns:
+            continue
+
+        # Qualified usages: old_ns::...
+        updated = re.sub(
+            rf'(?<![A-Za-z0-9_]){re.escape(old_ns)}(?=::)',
+            new_ns,
+            updated
+        )
+
+        # namespace old_ns { ... }
+        updated = re.sub(
+            rf'(\bnamespace\s+){re.escape(old_ns)}(?=\s*\{{)',
+            rf'\1{new_ns}',
+            updated
+        )
+
+        # using namespace old_ns;
+        updated = re.sub(
+            rf'(\busing\s+namespace\s+){re.escape(old_ns)}(?=\s*;)',
+            rf'\1{new_ns}',
+            updated
+        )
+
+        # namespace close comments: // namespace old_ns::...
+        updated = re.sub(
+            rf'(//\s*namespace\s+){re.escape(old_ns)}(?=\s*(::|\b))',
+            rf'\1{new_ns}',
+            updated
+        )
+
+    return updated
+
+def build_api_prefix_rename_map(symbol_mapping):
+    """Build API family prefix rewrites from concrete symbol mappings.
+
+    Example:
+        cblas_sgemm -> aocl_52_cblas_sgemm
+        yields {'cblas_': 'aocl_52_cblas_'}
+
+    These rewrites are used for C++ wrapper identifiers in headers (e.g.,
+    cblas_gemm overloads) that may not appear as concrete ELF symbols.
+    """
+    # NOTE:
+    # - cblas_/lapacke_/blis_/bli_ are classic API families.
+    # - da_/aoclsparse_ are included for wrapper/prototype fallbacks in headers
+    #   where concrete symbol-level replacement may miss a declaration.
+    #   Actual rewrite is constrained to function-like identifiers in
+    #   apply_api_prefix_renames() to avoid touching types like da_status,
+    #   da_int, aoclsparse_int, etc.
+    families = ('cblas_', 'lapacke_', 'blis_', 'bli_', 'da_', 'aoclsparse_')
+    prefix_map = {}
+
+    for old_name, new_name in symbol_mapping.items():
+        if not isinstance(old_name, str) or not isinstance(new_name, str):
+            continue
+
+        for family in families:
+            if not old_name.startswith(family):
+                continue
+            if not new_name.endswith(old_name):
+                continue
+
+            new_family = new_name[:-len(old_name)] + family
+            if new_family == family:
+                continue
+
+            if family in prefix_map and prefix_map[family] != new_family:
+                continue
+
+            prefix_map[family] = new_family
+
+    return prefix_map
+
+def infer_wrapper_prefix(api_prefix_renames, preferred_families=None):
+    """Infer the common textual wrapper prefix from API family rewrites.
+
+    Example:
+        {'cblas_': 'mylib_52_cblas_'} -> 'mylib_52_'
+    """
+    if not api_prefix_renames:
+        return ''
+
+    requested_families = preferred_families
+    if requested_families is None:
+        requested_families = ('cblas_', 'lapacke_', 'blis_', 'bli_', 'da_', 'aoclsparse_')
+
+    for family in requested_families:
+        mapped = api_prefix_renames.get(family)
+        if mapped and isinstance(mapped, str) and mapped.endswith(family):
+            return mapped[:-len(family)]
+
+    # When explicit families are requested, do not infer from unrelated mappings.
+    if preferred_families is not None:
+        return ''
+
+    for old_prefix, new_prefix in api_prefix_renames.items():
+        if isinstance(old_prefix, str) and isinstance(new_prefix, str) and old_prefix and new_prefix.endswith(old_prefix):
+            return new_prefix[:-len(old_prefix)]
+
+    return ''
+
+def build_cpp_namespace_fallback_map(api_prefix_renames):
+    """Build deterministic C++ namespace fallback rewrites for wrapper headers.
+
+    This targets wrapper namespaces that are not represented as mangled symbols,
+    such as `namespace blis` and `namespace libflame`.
+    """
+    # Restrict fallback namespace rewrites to BLAS/LAPACK-related mappings.
+    wrapper_prefix = infer_wrapper_prefix(
+        api_prefix_renames,
+        preferred_families=('cblas_', 'lapacke_', 'blis_', 'bli_'),
+    )
+    if not wrapper_prefix:
+        return {}
+
+    return {
+        'blis': f'{wrapper_prefix}blis',
+        'libflame': f'{wrapper_prefix}libflame',
+    }
+
+def apply_api_prefix_renames(content, api_prefix_renames):
+    """Apply identifier-level API family prefix rewrites in headers.
+
+    Rewrites identifiers that begin with known API family stems, such as:
+      cblas_*  -> aocl_52_cblas_*
+      lapacke_* -> aocl_52_lapacke_*
+    """
+    if not api_prefix_renames:
+        return content
+
+    updated = content
+    for old_prefix, new_prefix in sorted(api_prefix_renames.items(), key=lambda x: len(x[0]), reverse=True):
+        if old_prefix == new_prefix:
+            continue
+
+        # Restrict to function-like identifiers only, i.e. tokens that are
+        # eventually followed by '(' (possibly with spaces in-between).
+        # Also skip callback/type-like names (e.g., da_resfun_t_d) to avoid
+        # breaking typedef-based API contracts.
+        pattern = re.compile(
+            rf'(?<![A-Za-z0-9_])({re.escape(old_prefix)}[A-Za-z0-9_]*)(?=\s*\()'
+        )
+
+        def _rewrite_if_function_name(match):
+            token = match.group(1)
+            # Callback/type-like identifiers should not be rewritten.
+            # Example: da_resfun_t_d, da_reshes_t_s
+            if '_t_' in token or token.endswith('_t'):
+                return token
+            return token.replace(old_prefix, new_prefix, 1)
+
+        updated = pattern.sub(_rewrite_if_function_name, updated)
+
+    return updated
+
+def apply_cpp_wrapper_identifier_renames(content, header_path, api_prefix_renames):
+    """Rename unprefixed C++ wrapper function identifiers in selected headers.
+
+    Scope-limited fallback for wrapper façades that don't appear as concrete ELF
+    symbols (e.g., rotg/potrf overload wrappers in blis/libflame headers).
+    """
+    if not header_path:
+        return content
+
+    basename = os.path.basename(header_path)
+    if basename not in {'blis.hh', 'libflame_interface.hh'}:
+        return content
+
+    # Keep wrapper fallback tied to BLAS/LAPACK-related API mappings only.
+    wrapper_prefix = infer_wrapper_prefix(
+        api_prefix_renames,
+        preferred_families=('cblas_', 'lapacke_', 'blis_', 'bli_'),
+    )
+    if not wrapper_prefix:
+        return content
+
+    updated = content
+
+    # Collect candidate wrapper function names from declarations/definitions.
+    decl_pattern = re.compile(
+        r'^\s*(?:inline\s+|static\s+|constexpr\s+|extern\s+)*'
+        r'[A-Za-z_][A-Za-z0-9_:<>,\s\*&]*\s+'
+        r'([A-Za-z_][A-Za-z0-9_]*)\s*\(',
+        re.MULTILINE
+    )
+
+    reserved = {
+        'if', 'for', 'while', 'switch', 'return', 'sizeof', 'catch'
+    }
+
+    candidates = {
+        m.group(1)
+        for m in decl_pattern.finditer(updated)
+        if m.group(1) not in reserved and not m.group(1).startswith(wrapper_prefix)
+    }
+
+    for name in sorted(candidates, key=len, reverse=True):
+        updated = re.sub(
+            rf'(?<![A-Za-z0-9_]){re.escape(name)}(?=\s*\()',
+            f'{wrapper_prefix}{name}',
+            updated
+        )
+
+    return updated
+
+def is_std_mangled_symbol(symbol):
+    """Detect mangled symbols rooted in std:: namespace and skip them.
+
+    Covers common Itanium forms:
+    - _ZSt...           (abbreviated std::)
+    - _ZNSt... / _ZNKSt... etc. (nested std::)
+    """
+    if not is_itanium_mangled_symbol(symbol):
+        return False
+
+    if symbol.startswith('_ZSt'):
+        return True
+
+    # Special-name std::* forms (typeinfo/vtable/typeinfo-name/etc.).
+    if symbol.startswith(('_ZTSSt', '_ZTISt', '_ZTVSt', '_ZTTSt', '_ZTCSt')):
+        return True
+
+    n_index = _find_nested_name_index(symbol)
+    if _is_std_at_nested_name(symbol, n_index):
+        return True
+
+    return False
+
+def rename_mangled_symbol_with_namespace(symbol, prefix):
+    """Rename an Itanium mangled symbol by injecting a namespace component.
+
+    Example:
+        _ZN3foo3barEv + AOCL_ -> _ZN8AOCL_foo3barEv
+        _ZN3foo3barEv + aocl  -> _ZN7aoclfoo3barEv
+    """
+    prefix_token = normalize_mangled_prefix_token(prefix)
+    if not prefix_token:
+        return symbol
+
+    # Only mangled symbols are handled here.
+    if not is_itanium_mangled_symbol(symbol):
+        return symbol
+
+    # Never rename std::* symbols.
+    if is_std_mangled_symbol(symbol):
+        return symbol
+
+    n_index = _find_nested_name_index(symbol)
+    if n_index is None:
+        return symbol
+
+    return _replace_first_nested_component(symbol, n_index, prefix_token)
+
 def should_rename_symbol(symbol, prefix="AOCL_", allowed_namespaces=None):
     """Check if a symbol should be renamed.
     
@@ -82,6 +507,10 @@ def should_rename_symbol(symbol, prefix="AOCL_", allowed_namespaces=None):
     for rx in ABI_EXCLUDES:
         if re.search(rx, symbol):
             return False
+
+    # Never rename std:: APIs/symbols.
+    if 'std::' in symbol or is_std_mangled_symbol(symbol):
+        return False
     
     # If allowed_namespaces specified, only rename symbols from those namespaces
     # This is recommended for C++ libraries to avoid renaming STL or other dependencies
@@ -165,64 +594,11 @@ def get_intelligent_prefix(symbol_name, base_prefix):
         prefix = clean_prefix.upper()
         return prefix + '_' if has_trailing_underscore else prefix
 
-def analyze_symbol_case_patterns(symbols):
-    """
-    Analyze the case patterns in a list of symbols for debugging.
-    
-    Args:
-        symbols (list): List of symbol names
-    
-    Returns:
-        dict: Statistics about case patterns
-    """
-    patterns = {
-        'all_uppercase': 0,
-        'all_lowercase': 0,
-        'first_upper_mixed': 0,
-        'first_lower_mixed': 0,
-        'contains_special': 0,
-        'other': 0
-    }
-    
-    examples = {pattern: [] for pattern in patterns.keys()}
-    
-    for symbol in symbols:
-        if not symbol:
-            continue
-            
-        if symbol.isupper():
-            patterns['all_uppercase'] += 1
-            if len(examples['all_uppercase']) < 3:
-                examples['all_uppercase'].append(symbol)
-        elif symbol.islower():
-            patterns['all_lowercase'] += 1
-            if len(examples['all_lowercase']) < 3:
-                examples['all_lowercase'].append(symbol)
-        elif symbol[0].isupper():
-            patterns['first_upper_mixed'] += 1
-            if len(examples['first_upper_mixed']) < 3:
-                examples['first_upper_mixed'].append(symbol)
-        elif symbol[0].islower() and any(c.isupper() for c in symbol):
-            patterns['first_lower_mixed'] += 1
-            if len(examples['first_lower_mixed']) < 3:
-                examples['first_lower_mixed'].append(symbol)
-        elif any(c.isdigit() or c in ['@', '.', '$'] for c in symbol):
-            patterns['contains_special'] += 1
-            if len(examples['contains_special']) < 3:
-                examples['contains_special'].append(symbol)
-        else:
-            patterns['other'] += 1
-            if len(examples['other']) < 3:
-                examples['other'].append(symbol)
-    
-    return patterns, examples
-
 def generate_mapping(symbols, base_prefix, map_file):
     """Generate mapping file for objcopy with intelligent case-aware prefixing."""
     mapping = {}
     seen_symbols = set()
-    prefix_stats = {}
-    
+
     # Filter and deduplicate symbols
     valid_symbols = []
     for sym in symbols:
@@ -233,33 +609,28 @@ def generate_mapping(symbols, base_prefix, map_file):
     print(f"Total symbols found: {len(symbols)}")
     print(f"Symbols after filtering: {len(valid_symbols)}")
     
-    # Analyze case patterns for debugging (optional)
-    if len(valid_symbols) > 0:
-        patterns, examples = analyze_symbol_case_patterns(valid_symbols)
-        for pattern, count in patterns.items():
-            if count > 0:
-                pattern_name = pattern.replace('_', ' ').title()
-                example_list = ", ".join(examples[pattern][:2])
-    
+
     with open(map_file, 'w') as f:
         for sym in valid_symbols:
-            # Get intelligent prefix based on symbol case pattern
-            intelligent_prefix = get_intelligent_prefix(sym, base_prefix)
-            
-            # For symbols with leading underscores, prefix already includes them
-            # So we only append the rest of the symbol (without leading underscores)
-            if sym.startswith('_'):
-                leading_count = len(sym) - len(sym.lstrip('_'))
-                new_name = f"{intelligent_prefix}{sym[leading_count:]}"
+            # C++ mangled names need namespace-aware rewriting, not textual prefixing.
+            if is_itanium_mangled_symbol(sym):
+                new_name = rename_mangled_symbol_with_namespace(sym, base_prefix)
+                intelligent_prefix = '<mangled-namespace>'
             else:
-                new_name = f"{intelligent_prefix}{sym}"
+                # Get intelligent prefix based on symbol case pattern
+                intelligent_prefix = get_intelligent_prefix(sym, base_prefix)
 
-            # Track prefix usage statistics
-            if intelligent_prefix not in prefix_stats:
-                prefix_stats[intelligent_prefix] = {'count': 0, 'examples': []}
-            prefix_stats[intelligent_prefix]['count'] += 1
-            if len(prefix_stats[intelligent_prefix]['examples']) < 3:
-                prefix_stats[intelligent_prefix]['examples'].append(f"{sym} -> {new_name}")
+                # For symbols with leading underscores, prefix already includes them
+                # So we only append the rest of the symbol (without leading underscores)
+                if sym.startswith('_'):
+                    leading_count = len(sym) - len(sym.lstrip('_'))
+                    new_name = f"{intelligent_prefix}{sym[leading_count:]}"
+                else:
+                    new_name = f"{intelligent_prefix}{sym}"
+
+            # Skip no-op mappings to keep map clean and objcopy stable.
+            if new_name == sym:
+                continue
 
             f.write(f"{sym} {new_name}\n")
             mapping[sym] = new_name
@@ -319,9 +690,6 @@ def rename_shared_library_objcopy(lib_file, prefix, map_file, symbol_mapping):
     For shared libraries, we can directly use objcopy without extracting anything.
     """
     print(f"Processing shared library: {lib_file}")
-    
-    # Get file size for progress indication
-    file_size_mb = os.path.getsize(lib_file) / (1024 * 1024)
     
     # Create renamed directory structure
     lib_dir = os.path.dirname(lib_file)
@@ -503,19 +871,6 @@ def create_shared_library(static_lib, map_file=None, output_so=None, additional_
         print(f"Error: Shared library was not created")
         return None
 
-def get_symbols_windows(lib_file):
-    """Extract symbols using dumpbin on Windows."""
-    result = subprocess.run(['dumpbin', '/symbols', lib_file], capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr)
-    symbols = []
-    for line in result.stdout.splitlines():
-        if 'External' in line:
-            parts = line.strip().split()
-            if len(parts) > 0:
-                symbols.append(parts[-1])
-    return symbols
-
 def rename_symbols(lib_file, prefix, header_paths=None, create_so=False, so_libs=None, compiler='gcc', linker_flags=None):
     """Main function to rename symbols in libraries.
     
@@ -527,9 +882,8 @@ def rename_symbols(lib_file, prefix, header_paths=None, create_so=False, so_libs
         so_libs: Additional libraries needed when creating shared library (e.g., ['-lgfortran', '-lm'])
     """
     os_type = platform.system()
-    base_name = os.path.splitext(os.path.basename(lib_file))[0]
     # Use consistent map file name
-    map_file = f"{base_name}_map.txt"
+    map_file = f"{os.path.splitext(os.path.basename(lib_file))[0]}_map.txt"
 
     if os_type == 'Linux':
         # Determine library type
@@ -608,26 +962,7 @@ def rename_symbols(lib_file, prefix, header_paths=None, create_so=False, so_libs
         # (already handled by build system)
 
     elif os_type == 'Windows':
-        symbols = get_symbols_windows(lib_file)
-        symbol_mapping = generate_mapping(symbols, prefix, map_file)
-        
-        if not symbol_mapping:
-            print(f"No symbols to rename in {lib_file}")
-            return {}
-        
-        subprocess.run(['llvm-objcopy', f'--redefine-syms={map_file}', lib_file], check=True)
-        print(f"Renaming complete for {lib_file} with prefix '{prefix}' ({len(symbol_mapping)} symbols).")
-
-        if lib_file.lower().endswith('.lib'):
-            tmp_dir = 'tmp_objs'
-            os.makedirs(tmp_dir, exist_ok=True)
-            subprocess.run(['lib', f'/extract:*', lib_file, f'/out:{tmp_dir}'], check=True)
-            subprocess.run(['lib', f'/out:{prefix}{base_name}.lib'] +
-                           [os.path.join(tmp_dir, f) for f in os.listdir(tmp_dir)], check=True)
-            print(f"New static library created: {prefix}{base_name}.lib")
-
-        if lib_file.lower().endswith('.dll'):
-            print("Warning: Internal renaming for DLL requires original .obj files and rebuild.")
+        raise NotImplementedError("Windows platform is not supported by this script")
     else:
         raise RuntimeError(f"Unsupported OS: {os_type}")
     
@@ -664,7 +999,7 @@ def find_symbols_in_header(content, symbol_mapping, compiled_pattern=None):
     
     return found_symbols
 
-def rename_prototypes_in_header_fast(header_path, symbol_mapping):
+def rename_prototypes_in_header_fast(header_path, symbol_mapping, namespace_renames=None, api_prefix_renames=None):
     """ULTRA-FAST header file symbol renaming using optimized string operations.
     
     For 26K+ symbols, regex patterns are too slow. This uses:
@@ -689,22 +1024,31 @@ def rename_prototypes_in_header_fast(header_path, symbol_mapping):
     # OPTIMIZATION 1: Filter to only symbols that ACTUALLY exist in this header
     # This reduces 26K symbols to typically 10-50 symbols per header!
     relevant_symbols = {old: new for old, new in symbol_mapping.items() if old in content}
-    
-    if not relevant_symbols:
-        return False  # No symbols to replace
-    
-    # OPTIMIZATION 2: For small symbol counts, use simple word-boundary regex
-    # This is much faster than a mega-pattern
-    if len(relevant_symbols) <= 100:
-        for old_sym, new_sym in sorted(relevant_symbols.items(), key=lambda x: len(x[0]), reverse=True):
-            pattern = r'\b' + re.escape(old_sym) + r'\b'
-            content = re.sub(pattern, new_sym, content)
-    else:
-        # For larger counts, use a combined pattern
-        sorted_syms = sorted(relevant_symbols.keys(), key=len, reverse=True)
-        escaped = [re.escape(s) for s in sorted_syms]
-        pattern = r'\b(' + '|'.join(escaped) + r')\b'
-        content = re.sub(pattern, lambda m: relevant_symbols[m.group(1)], content)
+
+    if relevant_symbols:
+        # OPTIMIZATION 2: For small symbol counts, use simple word-boundary regex
+        # This is much faster than a mega-pattern
+        if len(relevant_symbols) <= 100:
+            for old_sym, new_sym in sorted(relevant_symbols.items(), key=lambda x: len(x[0]), reverse=True):
+                pattern = r'\b' + re.escape(old_sym) + r'\b'
+                content = re.sub(pattern, new_sym, content)
+        else:
+            # For larger counts, use a combined pattern
+            sorted_syms = sorted(relevant_symbols.keys(), key=len, reverse=True)
+            escaped = [re.escape(s) for s in sorted_syms]
+            pattern = r'\b(' + '|'.join(escaped) + r')\b'
+            content = re.sub(pattern, lambda m: relevant_symbols[m.group(1)], content)
+
+    # Namespace identifier rewrite for C++ headers (e.g., alcp::utils -> AOCL_52_alcp::utils).
+    effective_namespace_renames = dict(namespace_renames or {})
+    for old_ns, new_ns in build_cpp_namespace_fallback_map(api_prefix_renames).items():
+        effective_namespace_renames.setdefault(old_ns, new_ns)
+    content = apply_namespace_renames(content, effective_namespace_renames)
+
+    # API family rewrite for wrapper identifiers not present as concrete ELF symbols
+    # (e.g., cblas_gemm overload names in C++ headers).
+    content = apply_api_prefix_renames(content, api_prefix_renames)
+    content = apply_cpp_wrapper_identifier_renames(content, header_path, api_prefix_renames)
     
     if content == original_content:
         return False
@@ -717,7 +1061,7 @@ def rename_prototypes_in_header_fast(header_path, symbol_mapping):
     except:
         return False
 
-def rename_prototypes_in_header(header_path, symbol_mapping, compiled_pattern=None):
+def rename_prototypes_in_header(header_path, symbol_mapping, compiled_pattern=None, namespace_renames=None, api_prefix_renames=None):
     """Rename function prototypes and references in a header file based on symbol mapping.
     
     Uses word boundary replacement to ensure accurate symbol renaming.
@@ -744,28 +1088,33 @@ def rename_prototypes_in_header(header_path, symbol_mapping, compiled_pattern=No
         # Find which symbols from our mapping exist in this header
         found_symbols = find_symbols_in_header(content, symbol_mapping, compiled_pattern)
         
-        if not found_symbols:
-            return False
-        
-        # Replace each symbol using word boundary matching
-        # Sort by symbol length (descending) to handle cases where one symbol is substring of another
-        sorted_symbols = sorted(found_symbols.keys(), key=len, reverse=True)
-        
         total_replacements = 0
-        for old_symbol in sorted_symbols:
-            new_symbol = symbol_mapping[old_symbol]
-            
-            # Use word boundary to match only complete symbol names
-            pattern = r'\b' + re.escape(old_symbol) + r'\b'
-            
-            # Count and replace
-            new_content, count = re.subn(pattern, new_symbol, content)
-            
-            if count > 0:
-                content = new_content
-                total_replacements += count
+        if found_symbols:
+            # Replace each symbol using word boundary matching
+            # Sort by symbol length (descending) to handle cases where one symbol is substring of another
+            sorted_symbols = sorted(found_symbols.keys(), key=len, reverse=True)
+
+            for old_symbol in sorted_symbols:
+                new_symbol = symbol_mapping[old_symbol]
+
+                # Use word boundary to match only complete symbol names
+                pattern = r'\b' + re.escape(old_symbol) + r'\b'
+
+                # Count and replace
+                new_content, count = re.subn(pattern, new_symbol, content)
+
+                if count > 0:
+                    content = new_content
+                    total_replacements += count
+
+        effective_namespace_renames = dict(namespace_renames or {})
+        for old_ns, new_ns in build_cpp_namespace_fallback_map(api_prefix_renames).items():
+            effective_namespace_renames.setdefault(old_ns, new_ns)
+        content = apply_namespace_renames(content, effective_namespace_renames)
+        content = apply_api_prefix_renames(content, api_prefix_renames)
+        content = apply_cpp_wrapper_identifier_renames(content, header_path, api_prefix_renames)
         
-        if total_replacements > 0:
+        if total_replacements > 0 or content != original_content:
             # Write modified content
             with open(header_path, 'w', encoding='utf-8') as f:
                 f.write(content)
@@ -812,14 +1161,24 @@ def process_header_files(header_paths, symbol_mapping):
         print("No header files found to process")
         return
     
+    namespace_renames = build_namespace_rename_map(symbol_mapping)
+    api_prefix_renames = build_api_prefix_rename_map(symbol_mapping)
+    namespace_fallback_renames = build_cpp_namespace_fallback_map(api_prefix_renames)
+
     print(f"Processing {len(all_header_files)} header files with {len(symbol_mapping)} symbol mappings...")
+    if namespace_renames:
+        print(f"Applying {len(namespace_renames)} C++ namespace rename mapping(s): {namespace_renames}")
+    if namespace_fallback_renames:
+        print(f"Applying {len(namespace_fallback_renames)} C++ namespace fallback mapping(s): {namespace_fallback_renames}")
+    if api_prefix_renames:
+        print(f"Applying {len(api_prefix_renames)} API family prefix rewrite(s): {api_prefix_renames}")
     
     # Process headers in parallel for speed!
     num_cores = max(2, multiprocessing.cpu_count() - 1)
     
     with multiprocessing.Pool(num_cores) as pool:
         # Create args for each header
-        args_list = [(header, symbol_mapping) for header in all_header_files]
+        args_list = [(header, symbol_mapping, namespace_renames, api_prefix_renames) for header in all_header_files]
         results = pool.starmap(rename_prototypes_in_header_fast, args_list)
     
     processed_files = sum(1 for r in results if r)
