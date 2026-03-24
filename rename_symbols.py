@@ -98,6 +98,13 @@ def _find_nested_name_index(symbol):
     if symbol.startswith('_ZZN'):
         return 3
 
+    # Local entity of a top-level (non-namespace) function: _ZZ<digits><name>...
+    # These are local statics (lookup tables, caches) inside top-level template
+    # functions.  The digit at position 3 distinguishes them from _ZZN (nested).
+    # Example: _ZZ14aoclsparse_rotIdE...3tbl -> _ZZ19AOCL_aoclsparse_rotIdE...3tbl
+    if symbol.startswith('_ZZ') and len(symbol) > 3 and symbol[3].isdigit():
+        return 2  # _replace_first_nested_component reads <len><name> at [3:]
+
     # Special-name encodings with nested type names.
     special_prefixes = (
         '_ZTVN', '_ZTIN', '_ZTSN', '_ZTTN', '_ZTCN', '_ZGVN', '_ZGRN'
@@ -108,6 +115,14 @@ def _find_nested_name_index(symbol):
 
     # Guard variable for local static with embedded encoding (_ZGVZ...).
     if symbol.startswith('_ZGVZ'):
+        # Top-level function check FIRST: digit at position 5 means the enclosing
+        # function is a top-level (non-namespace) template function.
+        # Must precede the find('N') search because template args often contain N.
+        # Example: _ZGVZ21aoclsparse_blkcsrmv_tIdENSt9enable_if...E8can_exec
+        #       -> _ZGVZ26AOCL_aoclsparse_blkcsrmv_tIdENSt9enable_if...E8can_exec
+        if len(symbol) > 5 and symbol[5].isdigit():
+            return 4  # _replace_first_nested_component reads <len><name> at [5:]
+        # Nested function: search for 'N' that starts the nested-name encoding.
         pos = symbol.find('N', 5)
         if pos != -1:
             return pos
@@ -118,6 +133,30 @@ def _find_nested_name_index(symbol):
         pos = symbol.find('_N')
         if pos != -1:
             return pos + 1
+
+    # Top-level RTTI / vtable / typeinfo for non-nested (non-namespace) types.
+    # Handles _ZTI<len><name>, _ZTV<len><name>, _ZTS<len><name>, etc.
+    # Example: _ZTI12basic_handleIdE  -> _ZTI17AOCL_basic_handleIdE
+    # Note: _ZTIN / _ZTVN / _ZTSN are already handled by special_prefixes above;
+    # this branch only fires when the character after the 4-char prefix is a digit.
+    for _rtti_pfx in ('_ZTI', '_ZTV', '_ZTS', '_ZTT', '_ZTC', '_ZGV', '_ZGR'):
+        if symbol.startswith(_rtti_pfx):
+            rest_idx = len(_rtti_pfx)  # position right after the prefix
+            if rest_idx < len(symbol) and symbol[rest_idx].isdigit():
+                # Return rest_idx - 1 so that _replace_first_nested_component
+                # skips one char (as if skipping 'N') and lands on the digits.
+                return rest_idx - 1
+            break  # prefix matched but next char is not digit; handled elsewhere
+
+    # Top-level function / variable: _Z<digits><name>...
+    # Covers template functions and free functions not inside any namespace.
+    # Examples:
+    #   _Z11da_tree_fitIdE...        -> _Z16AOCL_da_tree_fitIdE...
+    #   _Z10kt_trsv_ltILN16...       -> _Z15AOCL_kt_trsv_ltILN16...
+    #   _Z12estimate_nnz...cold      -> _Z17AOCL_estimate_nnz...cold  (clones preserved)
+    # Condition: third character is a digit (rules out _ZN, _ZS, _ZT, _ZG etc.).
+    if len(symbol) > 2 and symbol[2].isdigit():
+        return 1  # fake n_index: _replace_first_nested_component reads <len><name> at [2:]
 
     return None
 
@@ -656,8 +695,9 @@ def get_symbols_linux_static(lib_file):
             # Include both global and local defined symbols
             # UPPERCASE: T=global text, D=global data, R=global read-only, B=global BSS, W=weak, V=weak object
             # lowercase: t=local text, d=local data, r=local read-only, b=local BSS, w=weak, v=weak object
+            # u=unique-global (GCC guard variables for function-local statics, e.g. _ZGVZN...)
             # Exclude 'U' (undefined, external references like libc functions)
-            if symbol_type in ['T', 'D', 'R', 'B', 'W', 'V', 't', 'd', 'r', 'b', 'w', 'v']:
+            if symbol_type in ['T', 'D', 'R', 'B', 'W', 'V', 't', 'd', 'r', 'b', 'w', 'v', 'u']:
                 symbols.append(symbol_name)
     
     return symbols

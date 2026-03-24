@@ -9,7 +9,8 @@
 
 // Include BLAS/LAPACK headers from install path (conditionally based on enabled libraries)
 // This tests that the installed headers work correctly
-#ifdef ENABLE_BLAS
+// cblas.h provides f77_int which is int32_t (LP64) or int64_t (ILP64) depending on build config
+#if defined(ENABLE_BLAS) || defined(ENABLE_LAPACK)
 #include "cblas.h"
 #endif
 
@@ -292,122 +293,122 @@ extern size_t AMD_STRLEN(const char* s);
 #ifdef ENABLE_BLAS
 // External Fortran BLAS declarations - GEMM
 extern void SGEMM_FUNC(const char* transa, const char* transb, 
-                       const int* m, const int* n, const int* k,
-                       const float* alpha, const float* a, const int* lda,
-                       const float* b, const int* ldb,
-                       const float* beta, float* c, const int* ldc);
+                       const f77_int* m, const f77_int* n, const f77_int* k,
+                       const float* alpha, const float* a, const f77_int* lda,
+                       const float* b, const f77_int* ldb,
+                       const float* beta, float* c, const f77_int* ldc);
 
 extern void DGEMM_FUNC(const char* transa, const char* transb, 
-                       const int* m, const int* n, const int* k,
-                       const double* alpha, const double* a, const int* lda,
-                       const double* b, const int* ldb,
-                       const double* beta, double* c, const int* ldc);
+                       const f77_int* m, const f77_int* n, const f77_int* k,
+                       const double* alpha, const double* a, const f77_int* lda,
+                       const double* b, const f77_int* ldb,
+                       const double* beta, double* c, const f77_int* ldc);
 
 extern void CGEMM_FUNC(const char* transa, const char* transb, 
-                       const int* m, const int* n, const int* k,
-                       const void* alpha, const void* a, const int* lda,
-                       const void* b, const int* ldb,
-                       const void* beta, void* c, const int* ldc);
+                       const f77_int* m, const f77_int* n, const f77_int* k,
+                       const void* alpha, const void* a, const f77_int* lda,
+                       const void* b, const f77_int* ldb,
+                       const void* beta, void* c, const f77_int* ldc);
 
 extern void ZGEMM_FUNC(const char* transa, const char* transb, 
-                       const int* m, const int* n, const int* k,
-                       const void* alpha, const void* a, const int* lda,
-                       const void* b, const int* ldb,
-                       const void* beta, void* c, const int* ldc);
+                       const f77_int* m, const f77_int* n, const f77_int* k,
+                       const void* alpha, const void* a, const f77_int* lda,
+                       const void* b, const f77_int* ldb,
+                       const void* beta, void* c, const f77_int* ldc);
 
 // External Fortran BLAS declarations - TRSM
 extern void STRSM_FUNC(const char* side, const char* uplo, const char* transa, const char* diag,
-                       const int* m, const int* n, const float* alpha,
-                       const float* a, const int* lda, float* b, const int* ldb);
+                       const f77_int* m, const f77_int* n, const float* alpha,
+                       const float* a, const f77_int* lda, float* b, const f77_int* ldb);
 
 extern void DTRSM_FUNC(const char* side, const char* uplo, const char* transa, const char* diag,
-                       const int* m, const int* n, const double* alpha,
-                       const double* a, const int* lda, double* b, const int* ldb);
+                       const f77_int* m, const f77_int* n, const double* alpha,
+                       const double* a, const f77_int* lda, double* b, const f77_int* ldb);
 
 extern void CTRSM_FUNC(const char* side, const char* uplo, const char* transa, const char* diag,
-                       const int* m, const int* n, const void* alpha,
-                       const void* a, const int* lda, void* b, const int* ldb);
+                       const f77_int* m, const f77_int* n, const void* alpha,
+                       const void* a, const f77_int* lda, void* b, const f77_int* ldb);
 
 extern void ZTRSM_FUNC(const char* side, const char* uplo, const char* transa, const char* diag,
-                       const int* m, const int* n, const void* alpha,
-                       const void* a, const int* lda, void* b, const int* ldb);
+                       const f77_int* m, const f77_int* n, const void* alpha,
+                       const void* a, const f77_int* lda, void* b, const f77_int* ldb);
 
 // External Fortran BLAS declarations - GEMV
-extern void SGEMV_FUNC(const char* trans, const int* m, const int* n,
-                       const float* alpha, const float* a, const int* lda,
-                       const float* x, const int* incx,
-                       const float* beta, float* y, const int* incy);
+extern void SGEMV_FUNC(const char* trans, const f77_int* m, const f77_int* n,
+                       const float* alpha, const float* a, const f77_int* lda,
+                       const float* x, const f77_int* incx,
+                       const float* beta, float* y, const f77_int* incy);
 
-extern void DGEMV_FUNC(const char* trans, const int* m, const int* n,
-                       const double* alpha, const double* a, const int* lda,
-                       const double* x, const int* incx,
-                       const double* beta, double* y, const int* incy);
+extern void DGEMV_FUNC(const char* trans, const f77_int* m, const f77_int* n,
+                       const double* alpha, const double* a, const f77_int* lda,
+                       const double* x, const f77_int* incx,
+                       const double* beta, double* y, const f77_int* incy);
 
-extern void CGEMV_FUNC(const char* trans, const int* m, const int* n,
-                       const void* alpha, const void* a, const int* lda,
-                       const void* x, const int* incx,
-                       const void* beta, void* y, const int* incy);
+extern void CGEMV_FUNC(const char* trans, const f77_int* m, const f77_int* n,
+                       const void* alpha, const void* a, const f77_int* lda,
+                       const void* x, const f77_int* incx,
+                       const void* beta, void* y, const f77_int* incy);
 
-extern void ZGEMV_FUNC(const char* trans, const int* m, const int* n,
-                       const void* alpha, const void* a, const int* lda,
-                       const void* x, const int* incx,
-                       const void* beta, void* y, const int* incy);
+extern void ZGEMV_FUNC(const char* trans, const f77_int* m, const f77_int* n,
+                       const void* alpha, const void* a, const f77_int* lda,
+                       const void* x, const f77_int* incx,
+                       const void* beta, void* y, const f77_int* incy);
 #endif // ENABLE_BLAS
 
 #ifdef ENABLE_LAPACK
 // External LAPACK declarations - GETRF (LU factorization)
-extern void SGETRF_FUNC(const int* m, const int* n, float* a, const int* lda,
-                        int* ipiv, int* info);
+extern void SGETRF_FUNC(const f77_int* m, const f77_int* n, float* a, const f77_int* lda,
+                        f77_int* ipiv, f77_int* info);
 
-extern void DGETRF_FUNC(const int* m, const int* n, double* a, const int* lda,
-                        int* ipiv, int* info);
+extern void DGETRF_FUNC(const f77_int* m, const f77_int* n, double* a, const f77_int* lda,
+                        f77_int* ipiv, f77_int* info);
 
-extern void CGETRF_FUNC(const int* m, const int* n, void* a, const int* lda,
-                        int* ipiv, int* info);
+extern void CGETRF_FUNC(const f77_int* m, const f77_int* n, void* a, const f77_int* lda,
+                        f77_int* ipiv, f77_int* info);
 
-extern void ZGETRF_FUNC(const int* m, const int* n, void* a, const int* lda,
-                        int* ipiv, int* info);
+extern void ZGETRF_FUNC(const f77_int* m, const f77_int* n, void* a, const f77_int* lda,
+                        f77_int* ipiv, f77_int* info);
 
 // External LAPACK declarations - POTRF (Cholesky factorization)
-extern void SPOTRF_FUNC(const char* uplo, const int* n, float* a, const int* lda, int* info);
+extern void SPOTRF_FUNC(const char* uplo, const f77_int* n, float* a, const f77_int* lda, f77_int* info);
 
-extern void DPOTRF_FUNC(const char* uplo, const int* n, double* a, const int* lda, int* info);
+extern void DPOTRF_FUNC(const char* uplo, const f77_int* n, double* a, const f77_int* lda, f77_int* info);
 
-extern void CPOTRF_FUNC(const char* uplo, const int* n, void* a, const int* lda, int* info);
+extern void CPOTRF_FUNC(const char* uplo, const f77_int* n, void* a, const f77_int* lda, f77_int* info);
 
-extern void ZPOTRF_FUNC(const char* uplo, const int* n, void* a, const int* lda, int* info);
+extern void ZPOTRF_FUNC(const char* uplo, const f77_int* n, void* a, const f77_int* lda, f77_int* info);
 
 // External LAPACK declarations - GESVD (SVD)
-extern void SGESVD_FUNC(const char* jobu, const char* jobvt, const int* m, const int* n,
-                        float* a, const int* lda, float* s, float* u, const int* ldu,
-                        float* vt, const int* ldvt, float* work, const int* lwork, int* info);
+extern void SGESVD_FUNC(const char* jobu, const char* jobvt, const f77_int* m, const f77_int* n,
+                        float* a, const f77_int* lda, float* s, float* u, const f77_int* ldu,
+                        float* vt, const f77_int* ldvt, float* work, const f77_int* lwork, f77_int* info);
 
-extern void DGESVD_FUNC(const char* jobu, const char* jobvt, const int* m, const int* n,
-                        double* a, const int* lda, double* s, double* u, const int* ldu,
-                        double* vt, const int* ldvt, double* work, const int* lwork, int* info);
+extern void DGESVD_FUNC(const char* jobu, const char* jobvt, const f77_int* m, const f77_int* n,
+                        double* a, const f77_int* lda, double* s, double* u, const f77_int* ldu,
+                        double* vt, const f77_int* ldvt, double* work, const f77_int* lwork, f77_int* info);
 
-extern void CGESVD_FUNC(const char* jobu, const char* jobvt, const int* m, const int* n,
-                        void* a, const int* lda, float* s, void* u, const int* ldu,
-                        void* vt, const int* ldvt, void* work, const int* lwork,
-                        float* rwork, int* info);
+extern void CGESVD_FUNC(const char* jobu, const char* jobvt, const f77_int* m, const f77_int* n,
+                        void* a, const f77_int* lda, float* s, void* u, const f77_int* ldu,
+                        void* vt, const f77_int* ldvt, void* work, const f77_int* lwork,
+                        float* rwork, f77_int* info);
 
-extern void ZGESVD_FUNC(const char* jobu, const char* jobvt, const int* m, const int* n,
-                        void* a, const int* lda, double* s, void* u, const int* ldu,
-                        void* vt, const int* ldvt, void* work, const int* lwork,
-                        double* rwork, int* info);
+extern void ZGESVD_FUNC(const char* jobu, const char* jobvt, const f77_int* m, const f77_int* n,
+                        void* a, const f77_int* lda, double* s, void* u, const f77_int* ldu,
+                        void* vt, const f77_int* ldvt, void* work, const f77_int* lwork,
+                        double* rwork, f77_int* info);
 
 // External LAPACK declarations - GESV (Solve linear system)
-extern void SGESV_FUNC(const int* n, const int* nrhs, float* a, const int* lda,
-                       int* ipiv, float* b, const int* ldb, int* info);
+extern void SGESV_FUNC(const f77_int* n, const f77_int* nrhs, float* a, const f77_int* lda,
+                       f77_int* ipiv, float* b, const f77_int* ldb, f77_int* info);
 
-extern void DGESV_FUNC(const int* n, const int* nrhs, double* a, const int* lda,
-                       int* ipiv, double* b, const int* ldb, int* info);
+extern void DGESV_FUNC(const f77_int* n, const f77_int* nrhs, double* a, const f77_int* lda,
+                       f77_int* ipiv, double* b, const f77_int* ldb, f77_int* info);
 
-extern void CGESV_FUNC(const int* n, const int* nrhs, void* a, const int* lda,
-                       int* ipiv, void* b, const int* ldb, int* info);
+extern void CGESV_FUNC(const f77_int* n, const f77_int* nrhs, void* a, const f77_int* lda,
+                       f77_int* ipiv, void* b, const f77_int* ldb, f77_int* info);
 
-extern void ZGESV_FUNC(const int* n, const int* nrhs, void* a, const int* lda,
-                       int* ipiv, void* b, const int* ldb, int* info);
+extern void ZGESV_FUNC(const f77_int* n, const f77_int* nrhs, void* a, const f77_int* lda,
+                       f77_int* ipiv, void* b, const f77_int* ldb, f77_int* info);
 #endif // ENABLE_LAPACK
 
 #ifdef ENABLE_BLAS
@@ -416,8 +417,8 @@ void test_gemm(void) {
     int passed = 1;
     
     // Test dimensions: C = A * B where A is 2x3, B is 3x2, C is 2x2
-    const int m = 2, n = 2, k = 3;
-    const int lda = m, ldb = k, ldc = m;
+    const f77_int m = 2, n = 2, k = 3;
+    const f77_int lda = m, ldb = k, ldc = m;
     const char transa = 'N', transb = 'N';
     
     // ========== SGEMM (Single Precision) ==========
@@ -572,8 +573,8 @@ void test_gemm(void) {
 void test_trsm(void) {
     printf("\n=== Testing TRSM (all precisions) with symbol prefix: %s ===\n", SYMBOL_PREFIX);
     
-    const int m = 2, n = 2;
-    const int lda = m, ldb = m;
+    const f77_int m = 2, n = 2;
+    const f77_int lda = m, ldb = m;
     const char side = 'L', uplo = 'U', transa = 'N', diag = 'N';
     
     // ========== STRSM (Single Precision) ==========
@@ -677,9 +678,9 @@ void test_trsm(void) {
 void test_gemv(void) {
     printf("\n=== Testing GEMV (all precisions) with symbol prefix: %s ===\n", SYMBOL_PREFIX);
     
-    const int m = 3, n = 2;
-    const int lda = m;
-    const int incx = 1, incy = 1;
+    const f77_int m = 3, n = 2;
+    const f77_int lda = m;
+    const f77_int incx = 1, incy = 1;
     const char trans = 'N';
     
     // ========== SGEMV (Single Precision) ==========
@@ -791,8 +792,8 @@ void test_gemv(void) {
 void test_axpby(void) {
     printf("\n=== Testing AXPBY (all precisions) with symbol prefix: %s ===\n", SYMBOL_PREFIX);
     
-    const int n = 5;
-    const int incx = 1, incy = 1;
+    const f77_int n = 5;
+    const f77_int incx = 1, incy = 1;
     
     // ========== SAXPBY (Single Precision) ==========
     {
@@ -848,10 +849,10 @@ void test_axpby(void) {
 void test_lapack_getrf(void) {
     printf("\n=== Testing GETRF (LU Factorization) with symbol prefix: %s ===\n", SYMBOL_PREFIX);
     
-    const int m = 3, n = 3;
-    const int lda = m;
-    int ipiv[3];
-    int info;
+    const f77_int m = 3, n = 3;
+    const f77_int lda = m;
+    f77_int ipiv[3];
+    f77_int info;
     
     // ========== SGETRF (Single Precision) ==========
     {
@@ -899,10 +900,10 @@ void test_lapack_getrf(void) {
 void test_lapack_potrf(void) {
     printf("\n=== Testing POTRF (Cholesky Factorization) with symbol prefix: %s ===\n", SYMBOL_PREFIX);
     
-    const int n = 3;
-    const int lda = n;
+    const f77_int n = 3;
+    const f77_int lda = n;
     const char uplo = 'U';
-    int info;
+    f77_int info;
     
     // ========== SPOTRF (Single Precision) ==========
     {
@@ -950,22 +951,22 @@ void test_lapack_potrf(void) {
 void test_lapack_gesvd(void) {
     printf("\n=== Testing GESVD (SVD) with symbol prefix: %s ===\n", SYMBOL_PREFIX);
     
-    const int m = 3, n = 2;
-    const int lda = m, ldu = m, ldvt = n;
+    const f77_int m = 3, n = 2;
+    const f77_int lda = m, ldu = m, ldvt = n;
     const char jobu = 'A', jobvt = 'A';
-    int info;
+    f77_int info;
     
     // ========== SGESVD (Single Precision) ==========
     {
         float A_s[] = {1.0f, 4.0f, 2.0f, 5.0f, 3.0f, 6.0f};
         float S_s[2], U_s[9], VT_s[4];
         float work_query;
-        int lwork = -1;
+        f77_int lwork = -1;
         
         printf("\n1. SGESVD (Single Precision SVD):\n");
         // Query optimal work size
         SGESVD_FUNC(&jobu, &jobvt, &m, &n, A_s, &lda, S_s, U_s, &ldu, VT_s, &ldvt, &work_query, &lwork, &info);
-        lwork = (int)work_query;
+        lwork = (f77_int)work_query;
         float* work = (float*)malloc(lwork * sizeof(float));
         
         // Compute SVD
@@ -980,11 +981,11 @@ void test_lapack_gesvd(void) {
         double A_d[] = {1.0, 4.0, 2.0, 5.0, 3.0, 6.0};
         double S_d[2], U_d[9], VT_d[4];
         double work_query;
-        int lwork = -1;
+        f77_int lwork = -1;
         
         printf("2. DGESVD (Double Precision SVD):\n");
         DGESVD_FUNC(&jobu, &jobvt, &m, &n, A_d, &lda, S_d, U_d, &ldu, VT_d, &ldvt, &work_query, &lwork, &info);
-        lwork = (int)work_query;
+        lwork = (f77_int)work_query;
         double* work = (double*)malloc(lwork * sizeof(double));
         
         double A_d_copy[] = {1.0, 4.0, 2.0, 5.0, 3.0, 6.0};
@@ -999,11 +1000,11 @@ void test_lapack_gesvd(void) {
         float S_c[2], rwork[10];
         float complex U_c[9], VT_c[4];
         float complex work_query;
-        int lwork = -1;
+        f77_int lwork = -1;
         
         printf("3. CGESVD (Complex Single Precision SVD):\n");
         CGESVD_FUNC(&jobu, &jobvt, &m, &n, A_c, &lda, S_c, U_c, &ldu, VT_c, &ldvt, &work_query, &lwork, rwork, &info);
-        lwork = (int)crealf(work_query);
+        lwork = (f77_int)crealf(work_query);
         float complex* work = (float complex*)malloc(lwork * sizeof(float complex));
         
         float complex A_c_copy[] = {1.0f+0.0f*I, 4.0f+0.0f*I, 2.0f+0.0f*I, 5.0f+0.0f*I, 3.0f+0.0f*I, 6.0f+0.0f*I};
@@ -1018,11 +1019,11 @@ void test_lapack_gesvd(void) {
         double S_z[2], rwork[10];
         double complex U_z[9], VT_z[4];
         double complex work_query;
-        int lwork = -1;
+        f77_int lwork = -1;
         
         printf("4. ZGESVD (Complex Double Precision SVD):\n");
         ZGESVD_FUNC(&jobu, &jobvt, &m, &n, A_z, &lda, S_z, U_z, &ldu, VT_z, &ldvt, &work_query, &lwork, rwork, &info);
-        lwork = (int)creal(work_query);
+        lwork = (f77_int)creal(work_query);
         double complex* work = (double complex*)malloc(lwork * sizeof(double complex));
         
         double complex A_z_copy[] = {1.0+0.0*I, 4.0+0.0*I, 2.0+0.0*I, 5.0+0.0*I, 3.0+0.0*I, 6.0+0.0*I};
@@ -1037,10 +1038,10 @@ void test_lapack_gesvd(void) {
 void test_lapack_gesv(void) {
     printf("\n=== Testing GESV (Solve Linear System) with symbol prefix: %s ===\n", SYMBOL_PREFIX);
     
-    const int n = 3, nrhs = 1;
-    const int lda = n, ldb = n;
-    int ipiv[3];
-    int info;
+    const f77_int n = 3, nrhs = 1;
+    const f77_int lda = n, ldb = n;
+    f77_int ipiv[3];
+    f77_int info;
     
     // ========== SGESV (Single Precision) ==========
     {
