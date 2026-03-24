@@ -472,6 +472,10 @@ if(BUILD_RENAMED_TEST AND ENABLE_AOCL_BLAS)
         -cpp
     )
 
+    if(ENABLE_ILP64)
+        target_compile_options(mix_libraries PRIVATE -fdefault-integer-8)
+    endif()
+
     # Link using imported targets
     target_link_libraries(mix_libraries PRIVATE
         aocl_original
