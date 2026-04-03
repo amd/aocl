@@ -87,7 +87,7 @@ option(ENABLE_AMD_AOCC_FLAGS "Check if we need to enable amd aocc flags for AOCL
 option(ENABLE_TRSM_PREINVERSION "Check if we need to enable trsm preinversion" ON)
 option(ENABLE_ILP64 "Check if we need to enable ILP64" OFF)
 option(ENABLE_BLAS_EXT_GEMMT "Check if we need to enable blas external gemmt for AOCL-LAPACK library build" ON)
-option(ENABLE_AOCL_LAPACK_BLAS_COUPLING "Check if we need to tightly coupled with AOCL-BLAS library for AOCL-LAPACK library build" OFF)
+option(ENABLE_AOCL_LAPACK_BLAS_COUPLING "Check if we need to tightly coupled with AOCL-BLAS library for AOCL-LAPACK library build" ON)
 option(ENABLE_TESTS "Enable building and running library functionality tests" OFF)
 
 # Set build static libs option based on shared libs option
