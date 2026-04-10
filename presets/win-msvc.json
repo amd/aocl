@@ -27,7 +27,7 @@
           },
           {
             "name": "aocl-win-msvc-mt-ilp-nopreinv-nogemmt-config",
-            "inherits": ["win-msvc", "mt", "ilp64", "shared", "complex-return-intel", "disable_trsm_preinversion", "enable_amd_flags", "disable_blas_ext_gemmt"],
+            "inherits": ["win-msvc", "mt", "ilp64", "shared", "complex-return-intel", "disable_trsm_preinversion", "enable_amd_flags", "disable_blas_ext_gemmt", "enable_aocl_blas"],
             "cacheVariables": {
                 "ENABLE_AOCL_UTILS": "ON",
                 "ENABLE_AOCL_BLAS": "ON",
