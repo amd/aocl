@@ -123,7 +123,20 @@ extern size_t AMD_STRLEN(const char* s);
     #define CBLAS_DAXPBY PREFIX_LOWER(cblas_daxpby)
     #define CBLAS_CAXPBY PREFIX_LOWER(cblas_caxpby)
     #define CBLAS_ZAXPBY PREFIX_LOWER(cblas_zaxpby)
-    
+
+    // CBLAS enum constants (renamed with uppercase prefix, e.g. <prefix>_CblasColMajor)
+    #define CblasRowMajor  CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasRowMajor)
+    #define CblasColMajor  CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasColMajor)
+    #define CblasNoTrans   CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasNoTrans)
+    #define CblasTrans     CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasTrans)
+    #define CblasConjTrans CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasConjTrans)
+    #define CblasUpper     CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasUpper)
+    #define CblasLower     CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasLower)
+    #define CblasNonUnit   CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasNonUnit)
+    #define CblasUnit      CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasUnit)
+    #define CblasLeft      CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasLeft)
+    #define CblasRight     CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasRight)
+
     // LAPACK functions
     #define SGETRF_FUNC PREFIX_UPPER(SGETRF)
     #define DGETRF_FUNC PREFIX_UPPER(DGETRF)
