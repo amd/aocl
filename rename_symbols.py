@@ -59,6 +59,75 @@ ABI_EXCLUDES = [
     r'^__gmon_start__$',
 ]
 
+# Standard C/POSIX/math library symbols that must never be renamed.
+# These appear as weak (W) defined symbols in BLIS static libraries because
+# the compiler emits them from BLIS_INLINE functions, but they are standard
+# libc/libm symbols and must retain their original names at all times.
+#
+# Built dynamically at module load by querying the installed system libraries
+# (libc, libm, libpthread) via `nm -D --defined-only`.  A small hardcoded
+# fallback set is merged in to guard against stripped or missing system libs.
+
+def _build_stdlib_excludes_from_system():
+    """Dynamically build stdlib exclusion set from installed system shared libraries.
+
+    Queries libc, libm, and libpthread via `nm -D --defined-only` so the set
+    is always correct for the target system without requiring a hand-maintained
+    symbol list.  Falls back to a minimal hardcoded set when system libs are
+    unavailable (e.g., cross-compilation environments).
+    """
+    # Minimal fallback covering the symbols actually observed in BLIS .a files.
+    # Used as a safety net when no system libraries can be found.
+    _FALLBACK = frozenset([
+        'abs', 'fabs', 'fabsf', 'sqrt', 'sqrtf', 'round', 'roundf',
+        'floor', 'floorf', 'ceil', 'ceilf', 'fmin', 'fminf', 'fmax', 'fmaxf',
+        'malloc', 'free', 'memcpy', 'memset', 'memcmp', 'strlen',
+        'pthread_create', 'pthread_join',
+    ])
+
+    # Candidate paths covering Debian/Ubuntu (x86_64 + aarch64) and RHEL/CentOS.
+    candidates = [
+        '/lib/x86_64-linux-gnu/libm.so.6',
+        '/lib/x86_64-linux-gnu/libc.so.6',
+        '/lib/x86_64-linux-gnu/libpthread.so.0',
+        '/lib/aarch64-linux-gnu/libm.so.6',
+        '/lib/aarch64-linux-gnu/libc.so.6',
+        '/lib/aarch64-linux-gnu/libpthread.so.0',
+        '/lib64/libm.so.6',
+        '/lib64/libc.so.6',
+        '/lib64/libpthread.so.0',
+        '/usr/lib/x86_64-linux-gnu/libm.so.6',
+        '/usr/lib/x86_64-linux-gnu/libc.so.6',
+    ]
+
+    excludes = set()
+    libs_found = 0
+    for lib in candidates:
+        if not os.path.exists(lib):
+            continue
+        result = subprocess.run(
+            ['nm', '-D', '--defined-only', '--no-sort', lib],
+            capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            continue
+        libs_found += 1
+        for line in result.stdout.splitlines():
+            parts = line.strip().split()
+            if len(parts) >= 3 and parts[1] in ('T', 'W', 'D', 'B'):
+                excludes.add(parts[2])
+
+    if libs_found == 0:
+        print("Warning: No system shared libraries found for stdlib exclusion; "
+              "using fallback symbol set.", file=sys.stderr)
+        return _FALLBACK
+
+    # Always include the fallback to cover stripped libs that omit weak symbols.
+    excludes |= _FALLBACK
+    return frozenset(excludes)
+
+STDLIB_SYMBOL_EXCLUDES = _build_stdlib_excludes_from_system()
+
 # Itanium C++ mangling helpers
 CV_REF_QUALIFIERS = set('rVKRO')
 
@@ -388,6 +457,254 @@ def build_cpp_namespace_fallback_map(api_prefix_renames):
         'libflame': f'{wrapper_prefix}libflame',
     }
 
+def apply_define_macro_lhs_renames(content, api_prefix_renames):
+    """Rename the LHS (macro name) and RHS of object-like #define alias macros.
+
+    BLIS uses chains of object-like #define aliases to select
+    type-specific implementations, e.g.:
+        #define bli_cscal2ris    bli_cccscal2ris
+    The macro name (bli_cscal2ris) is a pure preprocessor alias and never
+    appears as a binary symbol, so generate_mapping() never produces a mapping
+    for it.  When the inline function body referencing it is renamed, the
+    alias #define must also be renamed to avoid undefined identifier errors.
+
+    The RHS target (bli_cccscal2ris) may also be an inline-only symbol absent
+    from the binary map; if it carries a known API prefix it is renamed here
+    as well so that both sides of the alias agree after renaming.
+
+    This function renames the LHS token of #define lines that:
+      - define an object-like macro (no '(' immediately after the name), and
+      - whose name matches one of the API family prefixes being renamed.
+    It also renames any bare identifier on the RHS that starts with an old prefix.
+    """
+    if not api_prefix_renames:
+        return content
+
+    def _rename_identifier(ident):
+        for old_prefix, new_prefix in api_prefix_renames.items():
+            if ident.startswith(old_prefix) and not ident.startswith(new_prefix):
+                return new_prefix + ident[len(old_prefix):]
+        return ident
+
+    lines = content.split('\n')
+    result = []
+    for line in lines:
+        # Match: #define IDENTIFIER  (with optional leading whitespace, no '(' after name)
+        m = re.match(r'^(\s*#\s*define\s+)([A-Za-z_][A-Za-z0-9_]*)(\s+\S)', line)
+        if m:
+            prefix_part  = m.group(1)
+            macro_name   = m.group(2)
+            rest_of_line = line[m.end(2):]
+            # Rename the LHS if it starts with a known old prefix
+            new_macro_name = _rename_identifier(macro_name)
+            # Rename every identifier in the RHS that starts with a known old prefix
+            new_rhs = re.sub(
+                r'\b([A-Za-z_][A-Za-z0-9_]*)\b',
+                lambda mo: _rename_identifier(mo.group(1)),
+                rest_of_line,
+            )
+            if new_macro_name != macro_name or new_rhs != rest_of_line:
+                line = prefix_part + new_macro_name + new_rhs
+        result.append(line)
+    return '\n'.join(result)
+
+
+def apply_paste_token_prefix_renames(content, api_prefix_renames):
+    """Rename API prefixes that appear before token-paste operators (##) in macros.
+
+    BLIS defines helper macros that build symbol names via token pasting, e.g.:
+        #define PASTEMAC_(ch,op)  bli_ ## ch ## op
+    Because the prefix appears as a bare string fragment (not a complete C
+    identifier) before '##', the word-boundary regex used by
+    apply_api_prefix_renames skips it.  After renaming, the binary has
+    <prefix>bli_sXXX but the macro still generates bli_sXXX, causing
+    'implicit declaration' errors at compile time.
+
+    This function finds occurrences of old_prefix immediately followed by
+    optional whitespace and '##' in any #define body and replaces the prefix.
+    """
+    if not api_prefix_renames:
+        return content
+
+    for old_prefix, new_prefix in api_prefix_renames.items():
+        if old_prefix == new_prefix:
+            continue
+        # Match the prefix as a token fragment before ##, e.g.  bli_ ## or  bli_## 
+        pattern = re.escape(old_prefix) + r'(\s*##)'
+        replacement = new_prefix + r'\1'
+        content = re.sub(pattern, replacement, content)
+    return content
+
+def apply_pastef77_prefix_renames(content, api_prefix_renames):
+    """Prepend the rename prefix token to PASTEF77x Fortran name-mangling macro bodies.
+
+    BLIS provides PASTEF770/PASTEF77/PASTEF772/PASTEF773 (and their S and
+    underscore variants) to build Fortran BLAS symbol names via token pasting:
+        #define PASTEF770(name)      name           -> expands to e.g. sgemm
+        #define PASTEF770(name)      name ## _      -> expands to e.g. sgemm_
+
+    After symbol renaming the Fortran symbols are prefixed (e.g. <prefix>sgemm_),
+    so the macro bodies must emit the new prefix token at the start:
+        #define PASTEF770(name)      <prefix> ## name
+        #define PASTEF770(name)      <prefix> ## name ## _
+
+    This function rewrites only the #define bodies of these eight macro families
+    by inserting `<rename_prefix> ## ` at the start of the token-paste chain.
+    It is idempotent: if the prefix is already present the line is left unchanged.
+    """
+    if not api_prefix_renames:
+        return content
+
+    rename_token = infer_wrapper_prefix(
+        api_prefix_renames,
+        preferred_families=('cblas_', 'lapacke_', 'blis_', 'bli_'),
+    )
+    if not rename_token:
+        return content
+
+    esc = re.escape(rename_token)
+
+    def _patch_line(line):
+        # Only act on lines that define one of the PASTEF77x macros.
+        m = re.match(r'^(\s*#\s*define\s+)(PASTEF77[0-9]*S?)\s*\(', line)
+        if not m:
+            return line
+        # Already patched?
+        if re.search(esc, line):
+            return line
+        # Find the end of the parameter list (closing ')').
+        paren_start = line.index('(', m.end(1) + len(m.group(2)))
+        depth = 0
+        body_start = paren_start
+        for i in range(paren_start, len(line)):
+            if line[i] == '(':
+                depth += 1
+            elif line[i] == ')':
+                depth -= 1
+                if depth == 0:
+                    body_start = i + 1
+                    break
+        # body_start points to the first character after the closing ')'
+        after_paren = line[body_start:]
+        body = after_paren.lstrip()
+        ws = after_paren[: len(after_paren) - len(body)]
+        # Insert `rename_token ## ` before the existing body
+        new_body = rename_token + ' ## ' + body
+        return line[:body_start] + ws + new_body
+
+    return '\n'.join(_patch_line(l) for l in content.split('\n'))
+
+
+def apply_lapack_global_suffix_renames(content, api_prefix_renames):
+    """Rename bare Fortran symbol names inside LAPACK_GLOBAL_SUFFIX() calls.
+
+    lapack.h declares Fortran-interface wrappers as:
+        #define LAPACK_cgbrfsx_base LAPACK_GLOBAL_SUFFIX(cgbrfsx,CGBRFSX)
+    The Fortran symbol cgbrfsx_ is not present as a defined symbol in the
+    static library (LAPACK Fortran symbols are link-time external references),
+    so it never appears in the binary symbol map. Consequently the
+    LAPACK_GLOBAL_SUFFIX arguments are left unrenamed, meaning the header still
+    references the original Fortran symbol name while the binary was renamed.
+
+    This function renames the lowercase and UPPERCASE arguments inside every
+    LAPACK_GLOBAL_SUFFIX(name, NAME) invocation according to the active API
+    prefix renames (specifically the lapacke_ family prefix which drives the
+    lowercase prefix for Fortran symbols).
+    """
+    if not api_prefix_renames:
+        return content
+
+    # Infer the lowercase wrapper prefix from cblas_/lapacke_/bli_ mappings
+    wrapper_prefix = infer_wrapper_prefix(
+        api_prefix_renames,
+        preferred_families=('cblas_', 'lapacke_', 'blis_', 'bli_'),
+    )
+    if not wrapper_prefix:
+        return content
+
+    upper_prefix = wrapper_prefix.upper()
+
+    def _rename_global_suffix(m):
+        low_name  = m.group(1)   # e.g. "cgbrfsx"
+        up_name   = m.group(2)   # e.g. "CGBRFSX"
+        # Only rename if not already prefixed
+        if not low_name.startswith(wrapper_prefix):
+            low_name = wrapper_prefix + low_name
+        if not up_name.startswith(upper_prefix):
+            up_name = upper_prefix + up_name
+        return f'LAPACK_GLOBAL_SUFFIX({low_name},{up_name})'
+
+    def _rename_global_suffix_line(line):
+        # Skip the macro *definition* line — only rename call sites.
+        # The definition uses its parameter names as mere identifiers;
+        # renaming them without updating the body would break the macro.
+        if '#define LAPACK_GLOBAL_SUFFIX(' in line:
+            return line
+        return re.sub(
+            r'LAPACK_GLOBAL_SUFFIX\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)',
+            _rename_global_suffix,
+            line,
+        )
+
+    content = '\n'.join(_rename_global_suffix_line(l) for l in content.split('\n'))
+    return content
+
+def apply_cblas_enum_renames(content, prefix):
+    """Rename CBLAS enum type names, enumerator constants, and LAPACK macros.
+
+    CBLAS enum types (CBLAS_ORDER, CBLAS_TRANSPOSE, CBLAS_UPLO,
+    CBLAS_DIAG, CBLAS_SIDE), their enumerator constants (CblasRowMajor, etc.),
+    and LAPACK integer macros (LAPACK_ROW_MAJOR, LAPACK_COL_MAJOR) are
+    identical between AOCL and MKL.  Since they are compile-time constructs
+    (not binary symbols) they are never renamed by the object-copy pass.
+
+    This function renames them in the copied renamed headers so that including
+    both AOCL renamed headers and MKL headers in the same translation unit
+    does not cause redefinition errors.
+    """
+    if not prefix:
+        return content
+
+    # Derive the uppercase and mixed-case prefix variants
+    # e.g. prefix="mylib_" -> upper="MYLIB_", mixed="Mylib_"
+    upper_prefix = prefix.upper()
+    # For mixed-case enumerators like CblasRowMajor, we use UPPER prefix
+    enum_prefix = upper_prefix
+
+    # CBLAS enum type names  (e.g. CBLAS_ORDER -> <prefix>_CBLAS_ORDER)
+    cblas_enum_types = [
+        'CBLAS_ORDER', 'CBLAS_LAYOUT', 'CBLAS_TRANSPOSE',
+        'CBLAS_UPLO', 'CBLAS_DIAG', 'CBLAS_SIDE',
+        'CBLAS_IDENTIFIER', 'CBLAS_STORAGE',
+    ]
+    for name in cblas_enum_types:
+        new_name = enum_prefix + name
+        content = re.sub(rf'(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])', new_name, content)
+
+    # CBLAS enumerator constants (mixed-case, e.g. CblasRowMajor -> <prefix>CblasRowMajor)
+    cblas_enumerators = [
+        'CblasRowMajor', 'CblasColMajor',
+        'CblasNoTrans', 'CblasTrans', 'CblasConjTrans',
+        'CblasUpper', 'CblasLower',
+        'CblasNonUnit', 'CblasUnit',
+        'CblasLeft', 'CblasRight',
+        'CblasForward', 'CblasBackward',
+        'CblasConjNoTrans',
+        'CblasPacked',
+        'CblasAMatrix', 'CblasBMatrix',
+    ]
+    for name in cblas_enumerators:
+        new_name = enum_prefix + name
+        content = re.sub(rf'(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])', new_name, content)
+
+    # LAPACK integer macros (LAPACK_ROW_MAJOR, LAPACK_COL_MAJOR)
+    lapack_layout_macros = ['LAPACK_ROW_MAJOR', 'LAPACK_COL_MAJOR']
+    for name in lapack_layout_macros:
+        new_name = enum_prefix + name
+        content = re.sub(rf'(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])', new_name, content)
+
+    return content
+
 def apply_api_prefix_renames(content, api_prefix_renames):
     """Apply identifier-level API family prefix rewrites in headers.
 
@@ -546,6 +863,12 @@ def should_rename_symbol(symbol, prefix="AOCL_", allowed_namespaces=None):
     for rx in ABI_EXCLUDES:
         if re.search(rx, symbol):
             return False
+
+    # Never rename standard C/POSIX/math library symbols.
+    # These can appear as weak (W) defined symbols in static libs due to inline
+    # function emission, but they must retain their original names.
+    if symbol in STDLIB_SYMBOL_EXCLUDES:
+        return False
 
     # Never rename std:: APIs/symbols.
     if 'std::' in symbol or is_std_mangled_symbol(symbol):
@@ -1089,7 +1412,36 @@ def rename_prototypes_in_header_fast(header_path, symbol_mapping, namespace_rena
     # (e.g., cblas_gemm overload names in C++ headers).
     content = apply_api_prefix_renames(content, api_prefix_renames)
     content = apply_cpp_wrapper_identifier_renames(content, header_path, api_prefix_renames)
-    
+
+    # Rename object-like #define macro LHS aliases (e.g., bli_cscal2ris) and
+    # their RHS targets (e.g., bli_cccscal2ris).  These are pure-preprocessor
+    # or inline-only symbols absent from the binary map.
+    content = apply_define_macro_lhs_renames(content, api_prefix_renames)
+
+    # Rename API prefixes used as token fragments before ## in macro bodies
+    # (e.g., PASTEMAC_: bli_ ## ch ## op -> <prefix>bli_ ## ch ## op).
+    content = apply_paste_token_prefix_renames(content, api_prefix_renames)
+
+    # Prepend the rename prefix token to PASTEF77x Fortran name-mangling macros
+    # so that PASTEF770(name) -> <prefix> ## name (not just name), matching the
+    # renamed Fortran BLAS symbols (e.g. <prefix>sgemm_).
+    content = apply_pastef77_prefix_renames(content, api_prefix_renames)
+
+    # Rename Fortran symbol names inside LAPACK_GLOBAL_SUFFIX() calls.
+    # Fortran LAPACK symbols (e.g., cgbrfsx_) are not defined in the static lib
+    # so they never enter the binary symbol map, but the header still references
+    # them and must use the renamed names to match the renamed binary.
+    content = apply_lapack_global_suffix_renames(content, api_prefix_renames)
+
+    # Rename CBLAS enum type names, enumerator constants, and LAPACK
+    # layout macros which are compile-time constructs invisible to objcopy.
+    inferred_prefix = infer_wrapper_prefix(
+        api_prefix_renames,
+        preferred_families=('cblas_', 'lapacke_', 'blis_', 'bli_'),
+    )
+    if inferred_prefix:
+        content = apply_cblas_enum_renames(content, inferred_prefix)
+
     if content == original_content:
         return False
     
