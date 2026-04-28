@@ -649,6 +649,66 @@ def apply_lapack_global_suffix_renames(content, api_prefix_renames):
     content = '\n'.join(_rename_global_suffix_line(l) for l in content.split('\n'))
     return content
 
+def apply_lapack_export_renames(content, api_prefix_renames):
+    """Rename Fortran symbols inside LAPACK_EXPORT_* macros and bare call sites.
+
+    FLAME.h declares un-prefixed Fortran LAPACK symbols via:
+        #define LAPACK_EXPORT_<name>  F77_FUNC( <name> , <NAME> )
+    Those symbols are external references that objcopy never renames, so
+    mkl_lapack.h conflicts with FLAME.h on 54 "conflicting types" errors.
+    libflame_interface.hh also calls the same names directly as bare Fortran
+    call sites, so both forms must be patched.
+    """
+    if not api_prefix_renames:
+        return content
+
+    wrapper_prefix = infer_wrapper_prefix(
+        api_prefix_renames,
+        preferred_families=('cblas_', 'lapacke_', 'blis_', 'bli_'),
+    )
+    if not wrapper_prefix:
+        return content
+
+    upper_prefix = wrapper_prefix.upper()
+
+    _lapack_export_def_re = re.compile(
+        r'^(\s*#\s*define\s+LAPACK_EXPORT_\S+\s+F77_FUNC\(\s*)'
+        r'([A-Za-z_][A-Za-z0-9_]*)'
+        r'(\s*,\s*)'
+        r'([A-Za-z_][A-Za-z0-9_]*)'
+        r'(\s*\))',
+        re.MULTILINE,
+    )
+
+    def _rename_export_def(m):
+        low_name  = m.group(2)
+        up_name   = m.group(4)
+        if not low_name.startswith(wrapper_prefix):
+            low_name = wrapper_prefix + low_name
+        if not up_name.startswith(upper_prefix):
+            up_name = upper_prefix + up_name
+        return m.group(1) + low_name + m.group(3) + up_name + m.group(5)
+
+    content = _lapack_export_def_re.sub(_rename_export_def, content)
+
+    # Bare call sites in libflame_interface.hh: *(rfsx|svxx)_ and
+    # *la_*rfsx_extended_ in the four type-letters {s,d,c,z}.
+    _lapack_extended_call_re = re.compile(
+        r'(?<![A-Za-z0-9_])'
+        r'([sdcz](?:gb|ge|he|po|sy)(?:rfsx|svxx)_'
+        r'|[sdcz]la_(?:gb|ge|he|po|sy)rfsx_extended_)'
+        r'(?=\s*\()'
+    )
+    def _rename_extended_call(m):
+        name = m.group(1)
+        if name.startswith(wrapper_prefix):
+            return name
+        return wrapper_prefix + name
+    content = _lapack_extended_call_re.sub(_rename_extended_call, content)
+
+    return content
+
+
 def apply_cblas_enum_renames(content, prefix):
     """Rename CBLAS enum type names, enumerator constants, and LAPACK macros.
 
@@ -1433,6 +1493,11 @@ def rename_prototypes_in_header_fast(header_path, symbol_mapping, namespace_rena
     # them and must use the renamed names to match the renamed binary.
     content = apply_lapack_global_suffix_renames(content, api_prefix_renames)
 
+    # Rename Fortran symbol names inside LAPACK_EXPORT_* macros and bare
+    # Fortran call sites in libflame_interface.hh, so FLAME.h coexists with
+    # mkl_lapack.h.
+    content = apply_lapack_export_renames(content, api_prefix_renames)
+
     # Rename CBLAS enum type names, enumerator constants, and LAPACK
     # layout macros which are compile-time constructs invisible to objcopy.
     inferred_prefix = infer_wrapper_prefix(
@@ -1441,6 +1506,19 @@ def rename_prototypes_in_header_fast(header_path, symbol_mapping, namespace_rena
     )
     if inferred_prefix:
         content = apply_cblas_enum_renames(content, inferred_prefix)
+
+    # Patch BLIS_FUNC_PREFIX_STR string literal to match the renamed prefix
+    # (used by downstream code that constructs symbol names at runtime).
+    if inferred_prefix:
+        _func_prefix_str_re = re.compile(
+            r'(#\s*define\s+BLIS_FUNC_PREFIX_STR\s+")([A-Za-z_][A-Za-z0-9_]*)(")'
+        )
+        def _rename_func_prefix(m):
+            existing = m.group(2)
+            if existing.startswith(inferred_prefix):
+                return m.group(0)
+            return m.group(1) + inferred_prefix + existing + m.group(3)
+        content = _func_prefix_str_re.sub(_rename_func_prefix, content)
 
     if content == original_content:
         return False
@@ -1814,13 +1892,17 @@ if __name__ == "__main__":
     if "--so-libs" in sys.argv[3:]:
         so_libs_idx = sys.argv.index("--so-libs")
         if so_libs_idx + 1 < len(sys.argv):
-            # Collect all arguments until the next option (starting with --)
+            # Collect all arguments until the next option (starting with --).
+            # Each collected token is whitespace-split so callers may pass either
+            #   --so-libs -lgfortran -lm
+            # or a single quoted string:
+            #   --so-libs '-lgfortran -lm -fopenmp'
             so_libs = []
             for i in range(so_libs_idx + 1, len(sys.argv)):
                 arg = sys.argv[i]
                 if arg.startswith("--"):
                     break
-                so_libs.append(arg)
+                so_libs.extend(arg.split())
             if not so_libs:
                 print("Error: --so-libs requires at least one library")
                 sys.exit(1)
