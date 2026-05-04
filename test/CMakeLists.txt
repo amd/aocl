@@ -1,4 +1,4 @@
-# Copyright (C) 2025, Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2025-2026, Advanced Micro Devices, Inc. All rights reserved.
 
 cmake_minimum_required(VERSION 3.15)
 project(aocl_symbol_rename_test C CXX Fortran)
@@ -40,6 +40,10 @@ endif()
 
 if(ENABLE_AOCL_LIBMEM)
     list(APPEND ENABLED_LIBS "LIBMEM")
+endif()
+
+if(ENABLE_AOCL_OPENRNG)
+    list(APPEND ENABLED_LIBS "OPENRNG")
 endif()
 
 if(ENABLED_LIBS)
@@ -126,6 +130,10 @@ endif()
 
 if(ENABLE_AOCL_LIBMEM)
     target_compile_definitions(test_original_symbols PRIVATE ENABLE_LIBMEM)
+endif()
+
+if(ENABLE_AOCL_OPENRNG)
+    target_compile_definitions(test_original_symbols PRIVATE ENABLE_OPENRNG)
 endif()
 
 if(BUILD_SHARED_LIBS)
@@ -217,6 +225,10 @@ if(BUILD_RENAMED_TEST)
 
     if(ENABLE_AOCL_LIBMEM)
         target_compile_definitions(test_renamed_symbols PRIVATE ENABLE_LIBMEM)
+    endif()
+
+    if(ENABLE_AOCL_OPENRNG)
+        target_compile_definitions(test_renamed_symbols PRIVATE ENABLE_OPENRNG)
     endif()
 
     target_link_libraries(test_renamed_symbols PRIVATE

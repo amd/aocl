@@ -36,6 +36,10 @@
 #include "aoclda.h"
 #endif
 
+#ifdef ENABLE_OPENRNG
+#include "openrng.h"
+#endif
+
 #ifdef ENABLE_CRYPTO
 // External declarations for Crypto functions
 extern Uint64 ALCP_CIPHER_CONTEXT_SIZE(void);
@@ -198,7 +202,19 @@ extern size_t AMD_STRLEN(const char* s);
     #define DA_OPTIONS_SET_STRING PREFIX_LOWER(da_options_set_string)
     #define DA_OPTIONS_SET_INT PREFIX_LOWER(da_options_set_int)
     #define DA_KMEANS_SET_DATA_D PREFIX_LOWER(da_kmeans_set_data_d)
-    
+
+    // AOCL-OpenRNG functions (mixed-case symbols get uppercase prefix, no trailing underscore)
+    #define VSL_NEW_STREAM        CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, vslNewStream)
+    #define VSL_DELETE_STREAM     CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, vslDeleteStream)
+    #define VD_RNG_UNIFORM        CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, vdRngUniform)
+    #define VS_RNG_UNIFORM        CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, vsRngUniform)
+    #define VD_RNG_GAUSSIAN       CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, vdRngGaussian)
+    // OpenRNG VSL_* preprocessor constants are renamed to keep coexistence with MKL VSL.
+    #define OPENRNG_BRNG_MT19937            CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, VSL_BRNG_MT19937)
+    #define OPENRNG_RNG_METHOD_UNIFORM_STD  CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, VSL_RNG_METHOD_UNIFORM_STD)
+    #define OPENRNG_RNG_METHOD_GAUSSIAN_BM2 CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, VSL_RNG_METHOD_GAUSSIAN_BOXMULLER2)
+    #define OPENRNG_STREAM_STATE_PTR        CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, VSLStreamStatePtr)
+
     #define SYMBOL_PREFIX SYMBOL_PREFIX_STR
 #else
     // Original symbols (no prefix)
@@ -299,7 +315,18 @@ extern size_t AMD_STRLEN(const char* s);
     #define DA_OPTIONS_SET_STRING da_options_set_string
     #define DA_OPTIONS_SET_INT da_options_set_int
     #define DA_KMEANS_SET_DATA_D da_kmeans_set_data_d
-    
+
+    // AOCL-OpenRNG functions
+    #define VSL_NEW_STREAM    vslNewStream
+    #define VSL_DELETE_STREAM vslDeleteStream
+    #define VD_RNG_UNIFORM    vdRngUniform
+    #define VS_RNG_UNIFORM    vsRngUniform
+    #define VD_RNG_GAUSSIAN   vdRngGaussian
+    #define OPENRNG_BRNG_MT19937            VSL_BRNG_MT19937
+    #define OPENRNG_RNG_METHOD_UNIFORM_STD  VSL_RNG_METHOD_UNIFORM_STD
+    #define OPENRNG_RNG_METHOD_GAUSSIAN_BM2 VSL_RNG_METHOD_GAUSSIAN_BOXMULLER2
+    #define OPENRNG_STREAM_STATE_PTR        VSLStreamStatePtr
+
     #define SYMBOL_PREFIX "None"
 #endif
 
@@ -1507,6 +1534,69 @@ void test_libmem(void) {
 }
 #endif // ENABLE_LIBMEM
 
+#ifdef ENABLE_OPENRNG
+void test_openrng(void) {
+    printf("\n=== Testing AOCL-OpenRNG with symbol prefix: %s ===\n", SYMBOL_PREFIX);
+
+    OPENRNG_STREAM_STATE_PTR stream = NULL;
+    const openrng_int_t seed = 42;
+    int errcode;
+
+    printf("\n1. vslNewStream (MT19937, seed=42):\n");
+    errcode = VSL_NEW_STREAM(&stream, OPENRNG_BRNG_MT19937, seed);
+    if (errcode != 0 || stream == NULL) {
+        printf("   \xE2\x9C\x97 Stream creation failed (errcode=%d)\n", errcode);
+        return;
+    }
+    printf("   \xE2\x9C\x93 Stream created\n");
+
+    printf("2. vdRngUniform (10 doubles in [0, 1)):\n");
+    double dbuf[10] = {0};
+    errcode = VD_RNG_UNIFORM(OPENRNG_RNG_METHOD_UNIFORM_STD, stream, 10, dbuf, 0.0, 1.0);
+    if (errcode != 0) {
+        printf("   \xE2\x9C\x97 vdRngUniform failed (errcode=%d)\n", errcode);
+        VSL_DELETE_STREAM(&stream);
+        return;
+    }
+    int in_range = 1;
+    for (int i = 0; i < 10; i++) {
+        if (dbuf[i] < 0.0 || dbuf[i] >= 1.0) { in_range = 0; break; }
+    }
+    if (in_range) {
+        printf("   \xE2\x9C\x93 vdRngUniform succeeded (first sample = %f)\n", dbuf[0]);
+    } else {
+        printf("   \xE2\x9C\x97 vdRngUniform produced out-of-range values\n");
+    }
+
+    printf("3. vsRngUniform (10 floats in [-1, 1)):\n");
+    float fbuf[10] = {0};
+    errcode = VS_RNG_UNIFORM(OPENRNG_RNG_METHOD_UNIFORM_STD, stream, 10, fbuf, -1.0f, 1.0f);
+    if (errcode != 0) {
+        printf("   \xE2\x9C\x97 vsRngUniform failed (errcode=%d)\n", errcode);
+    } else {
+        printf("   \xE2\x9C\x93 vsRngUniform succeeded (first sample = %f)\n", fbuf[0]);
+    }
+
+    printf("4. vdRngGaussian (10 doubles, mean=0, sigma=1):\n");
+    errcode = VD_RNG_GAUSSIAN(OPENRNG_RNG_METHOD_GAUSSIAN_BM2, stream, 10, dbuf, 0.0, 1.0);
+    if (errcode != 0) {
+        printf("   \xE2\x9C\x97 vdRngGaussian failed (errcode=%d)\n", errcode);
+    } else {
+        printf("   \xE2\x9C\x93 vdRngGaussian succeeded (first sample = %f)\n", dbuf[0]);
+    }
+
+    printf("5. vslDeleteStream:\n");
+    errcode = VSL_DELETE_STREAM(&stream);
+    if (errcode == 0) {
+        printf("   \xE2\x9C\x93 Stream deleted\n");
+    } else {
+        printf("   \xE2\x9C\x97 Stream deletion failed (errcode=%d)\n", errcode);
+    }
+
+    printf("\n\xE2\x9C\x93 All AOCL-OpenRNG tests completed!\n");
+}
+#endif // ENABLE_OPENRNG
+
 void test_symbol_renaming(void) {
     printf("\n=== Symbol Renaming Configuration ===\n");
     
@@ -1550,6 +1640,9 @@ int main(int argc, char* argv[]) {
 #endif
 #ifdef ENABLE_LIBMEM
     printf("Testing AOCL-LibMem\n");
+#endif
+#ifdef ENABLE_OPENRNG
+    printf("Testing AOCL-OpenRNG\n");
 #endif
 #if defined(ENABLE_BLAS) || defined(ENABLE_LAPACK)
     printf("All precisions: S, D, C, Z\n");
@@ -1602,6 +1695,11 @@ int main(int argc, char* argv[]) {
 #ifdef ENABLE_DA
     // AOCL-DA tests
     test_da();
+#endif
+
+#ifdef ENABLE_OPENRNG
+    // AOCL-OpenRNG tests
+    test_openrng();
 #endif
     
     printf("\n========================================\n");

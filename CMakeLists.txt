@@ -1,4 +1,4 @@
-# Copyright (C) 2025, Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2025-2026, Advanced Micro Devices, Inc. All rights reserved.
 
 # Set the minimum required version of CMake
 cmake_minimum_required(VERSION 3.26.0)
@@ -37,29 +37,21 @@ message("CMAKE_CONFIGURATION_TYPES: ${CMAKE_CONFIGURATION_TYPES}")
 message("CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 message("CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}")
 
-# Configure parallel build cores
-# User can specify BUILD_CORES, otherwise defaults to 50% of available CPU cores
-# to use with the -j option for parallel builds, balancing performance and memory usage.
+# Parallel build cores: BUILD_CORES override, else 50% of nproc on UNIX / all on Windows.
 set(BUILD_CORES "" CACHE STRING "Number of cores for parallel build (empty for auto: 50% of available cores)")
 
 if(UNIX)
-    # Detect total number of available processors
     execute_process(COMMAND nproc
                     OUTPUT_VARIABLE NUM_CORES
                     OUTPUT_STRIP_TRAILING_WHITESPACE)
-    
-    # Use user-specified cores if provided, otherwise calculate 50% of available cores
     if(BUILD_CORES STREQUAL "")
-        # Calculate 50% of cores (round up to at least 1)
-        math(EXPR BUILD_CORES "(${NUM_CORES} + 1) / 2")  # +1 ensures rounding up
+        math(EXPR BUILD_CORES "(${NUM_CORES} + 1) / 2")
         message(STATUS "Using ${BUILD_CORES} cores for parallel build (auto: 50% of ${NUM_CORES} available cores)")
     else()
         message(STATUS "Using ${BUILD_CORES} cores for parallel build (user-specified)")
     endif()
-    
     set(parallel "-j${BUILD_CORES}")
 else()
-    # Windows: use BUILD_CORES if specified, otherwise use all cores
     if(NOT BUILD_CORES STREQUAL "")
         set(parallel "-j${BUILD_CORES}")
         message(STATUS "Using ${BUILD_CORES} cores for parallel build (user-specified)")
@@ -79,6 +71,7 @@ option(ENABLE_AOCL_CRYPTO "Check if we need to include AOCL-Crypto into AOCL uni
 option(ENABLE_AOCL_LIBM "Check if we need to include AOCL-LibM into AOCL unified library" OFF)
 option(ENABLE_AOCL_COMPRESSION "Check if we need to include AOCL-Compression into AOCL single library" OFF)
 option(ENABLE_AOCL_DA "Check if we need to include AOCL-DA into AOCL unified library" OFF)
+option(ENABLE_AOCL_OPENRNG "Check if we need to include OpenRNG into AOCL unified library" OFF)
 option(ENABLE_AOCL_LIBMEM "Check if we need to include AOCL-LibMem into AOCL unified library" OFF)
 option(ENABLE_MULTITHREADING "Check if we need to enable multithreading" OFF)
 option(ENABLE_CBLAS "Check if we need to enable AOCL-BLAS CBLAS interface" ON)
@@ -95,8 +88,6 @@ option(USE_SOURCES_FROM_SUBMODULES "Enable building and testing libraries using 
 if(USE_SOURCES_FROM_SUBMODULES)
     message(STATUS "Using sources from submodules")
     set(SUBMODULES_BASE_PATH "${CMAKE_SOURCE_DIR}/submodules")
-    
-    # Set all library paths using a loop for cleaner code
     foreach(LIB_VAR UTILS BLAS LAPACK SPARSE CRYPTO LIBM COMPRESSION DA LIBMEM)
         set(${LIB_VAR}_PATH "${SUBMODULES_BASE_PATH}")
     endforeach()
@@ -322,6 +313,17 @@ endif()
 
 if(ENABLE_AOCL_DA)
     enable_language(Fortran)
+    # Ninja + clang-cl + ifx: Windows-IntelLLVM.cmake wraps linker flags with
+    # "/Qoption,link," (LINKER_WRAPPER_FLAG, LIBRARY_PATH_FLAG, LINK_DEF_FILE_FLAG)
+    # which lld-link doesn't understand. Reset to plain MSVC equivalents so all
+    # subsequent targets (including OpenRNG) link cleanly.
+    if(WIN32 AND CMAKE_Fortran_COMPILER_ID MATCHES "IntelLLVM" AND CMAKE_GENERATOR MATCHES "Ninja")
+        set(CMAKE_Fortran_LINKER_WRAPPER_FLAG "" CACHE STRING "" FORCE)
+        set(CMAKE_Fortran_LINKER_WRAPPER_FLAG_SEP "" CACHE STRING "" FORCE)
+        set(CMAKE_LIBRARY_PATH_FLAG "/LIBPATH:" CACHE STRING "" FORCE)
+        set(CMAKE_LINK_DEF_FILE_FLAG "/DEF:" CACHE STRING "" FORCE)
+        message(STATUS "Cleared CMAKE_Fortran_LINKER_WRAPPER_FLAG, CMAKE_LIBRARY_PATH_FLAG and CMAKE_LINK_DEF_FILE_FLAG for lld-link compatibility.")
+    endif()
     if(NOT ENABLE_AOCL_BLAS OR NOT ENABLE_AOCL_UTILS OR NOT ENABLE_AOCL_LAPACK OR NOT ENABLE_AOCL_SPARSE)
         message(WARNING "AOCL-DA has dependency on AOCL-BLAS, AOCL-LAPACK and AOCL-Utils. Hence ENABLE_AOCL_BLAS, ENABLE_AOCL_LAPACK, ENABLE_AOCL_SPARSE and ENABLE_AOCL_UTILS should be \"check\" or \"ON\"")
         if(NOT ENABLE_AOCL_UTILS)
@@ -383,6 +385,51 @@ if(ENABLE_AOCL_CRYPTO)
     include(aocl_crypto_build.cmake)
 endif()
 
+if(ENABLE_AOCL_OPENRNG)
+    # Redirect OpenRNG's install rules into its own install_package (matching
+    # other libs) and mark them OPTIONAL so EXCLUDE_FROM_ALL artifacts don't
+    # abort the install.
+    set(_orng_local_prefix "${CMAKE_BINARY_DIR}/openrng/install_package")
+    install(CODE "
+        file(MAKE_DIRECTORY \"${_orng_local_prefix}\")
+        foreach(_f
+                \"${CMAKE_BINARY_DIR}/openrng/src/cmake_install.cmake\"
+                \"${CMAKE_BINARY_DIR}/openrng/cmake_install.cmake\")
+            if(EXISTS \"\${_f}\")
+                file(READ \"\${_f}\" _c)
+                string(FIND \"\${_c}\" \"AOCL_OPENRNG_PATCHED\" _already)
+                if(_already EQUAL -1)
+                    string(REPLACE \"TYPE SHARED_LIBRARY FILES\" \"TYPE SHARED_LIBRARY OPTIONAL FILES\" _c \"\${_c}\")
+                    string(REPLACE \"TYPE STATIC_LIBRARY FILES\" \"TYPE STATIC_LIBRARY OPTIONAL FILES\" _c \"\${_c}\")
+                    string(REPLACE \"TYPE MODULE_LIBRARY FILES\" \"TYPE MODULE_LIBRARY OPTIONAL FILES\" _c \"\${_c}\")
+                    string(REPLACE \"TYPE EXECUTABLE FILES\"     \"TYPE EXECUTABLE OPTIONAL FILES\"     _c \"\${_c}\")
+                    # Target file contains literal `\${CMAKE_INSTALL_PREFIX}`,
+                    # hence the extra escaping below.
+                    string(REPLACE
+                        \"DESTINATION \\\"\\\${CMAKE_INSTALL_PREFIX}\"
+                        \"DESTINATION \\\"${_orng_local_prefix}\"
+                        _c \"\${_c}\")
+                    set(_c \"# AOCL_OPENRNG_PATCHED\\n\${_c}\")
+                    file(WRITE \"\${_f}\" \"\${_c}\")
+                    message(STATUS \"OpenRNG install: patched \${_f} -> ${_orng_local_prefix} (OPTIONAL).\")
+                endif()
+            endif()
+        endforeach()
+    ")
+endif()
+
+if(ENABLE_AOCL_OPENRNG)
+    if(NOT ENABLE_AOCL_LIBM)
+        set(ENABLE_AOCL_LIBM ON)
+        if(NOT ENABLE_AOCL_UTILS)
+            set(ENABLE_AOCL_UTILS ON)
+            include(aocl_utils_build.cmake)
+        endif()
+        include(aocl_libm_build.cmake)
+    endif()
+    include(aocl_openrng_build.cmake)
+endif()
+
 # Merge def files on Windows
 if(BUILD_SHARED_LIBS AND WIN32)
     string(REPLACE "\\" "/" MERGED_DEF "${CMAKE_BINARY_DIR}/exports.def")
@@ -412,9 +459,11 @@ if(BUILD_SHARED_LIBS)
     if(WIN32)
         target_link_options(${PROJECT_NAME} PRIVATE "/DEF:${MERGED_DEF}")
         set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /dll")
-		if(CMAKE_Fortran_COMPILER)
-	        target_link_directories(${PROJECT_NAME} PRIVATE "C:/Program Files (x86)/Intel/oneAPI/compiler/latest/lib")
-		endif()
+        if(CMAKE_Fortran_COMPILER)
+            # Pass /LIBPATH: directly via target_link_options (target_link_directories
+            # would prepend ifx's "/Qoption,link," wrapper, which lld-link rejects).
+            target_link_options(${PROJECT_NAME} PRIVATE "/LIBPATH:C:/Program Files (x86)/Intel/oneAPI/compiler/latest/lib")
+        endif()
     else()
         if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
             set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=ld")
@@ -439,12 +488,10 @@ install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
         )
 
 # === SYMBOL RENAMING INTEGRATION ===
-# Single variable to control symbol renaming: if empty, renaming is disabled
-# If set to a prefix (e.g., "AOCL_"), renaming is enabled with that prefix
+# Empty = disabled; set to a prefix (e.g. "AOCL_") to enable.
 set(SYMBOL_RENAME_PREFIX "" CACHE STRING "Prefix for symbol renaming (empty to disable)")
 
-# Check if LibMem is enabled - symbol renaming is incompatible with LibMem
-# LibMem uses IFUNC (indirect functions) that must retain standard C library names (memcpy, memset, etc.)
+# Incompatible with LibMem (IFUNC symbols must keep standard libc names).
 if(ENABLE_AOCL_LIBMEM AND SYMBOL_RENAME_PREFIX)
     message(FATAL_ERROR "Symbol renaming is not compatible with AOCL-LibMem. "
                         "LibMem uses IFUNC symbols that must retain standard C library names. "
@@ -452,36 +499,27 @@ if(ENABLE_AOCL_LIBMEM AND SYMBOL_RENAME_PREFIX)
                         "disable symbol renaming by omitting the SYMBOL_RENAME_PREFIX option.")
 endif()
 
-# Function to create symbol renaming target
 function(add_symbol_renaming_target)
     if(SYMBOL_RENAME_PREFIX)
-        # Find Python interpreter
         find_package(Python3 COMPONENTS Interpreter REQUIRED)
-        
-        # Determine the installation package path
         set(INSTALL_PACKAGE_PATH "${CMAKE_INSTALL_PREFIX}")
-        
-        # Determine additional libraries needed for shared library creation
+
+        # Extra libs needed when re-linking the renamed static archive into a .so.
         set(SO_ADDITIONAL_LIBS "-lstdc++ -lpthread")
         if(ENABLE_AOCL_LAPACK OR ENABLE_AOCL_BLAS OR ENABLE_AOCL_DA)
             set(SO_ADDITIONAL_LIBS "${SO_ADDITIONAL_LIBS} -lgfortran -lquadmath")
         endif()
-        
-        # Handle OpenMP flags properly based on configuration
         if(ENABLE_MULTITHREADING)
             if(OpenMP_libomp_LIBRARY AND EXISTS "${OpenMP_libomp_LIBRARY}")
-                # Use explicit OpenMP library path provided by user
                 set(SO_ADDITIONAL_LIBS "${SO_ADDITIONAL_LIBS} ${OpenMP_libomp_LIBRARY}")
             elseif(OpenMP_C_FLAGS)
-                # Use OpenMP flags from find_package(OpenMP)
                 set(SO_ADDITIONAL_LIBS "${SO_ADDITIONAL_LIBS} ${OpenMP_C_FLAGS}")
             else()
-                # Fallback to -fopenmp (libgomp for GCC and libomp for AOCC/Clang)
                 set(SO_ADDITIONAL_LIBS "${SO_ADDITIONAL_LIBS} -fopenmp")
             endif()
         endif()
-        
-        # Create optional custom target for symbol renaming (only runs when explicitly called)
+
+        # Optional custom target (manual invocation).
         if(BUILD_SHARED_LIBS)
             add_custom_target(rename_symbols
                 COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/rename_symbols.py 
@@ -503,32 +541,28 @@ function(add_symbol_renaming_target)
             set(RENAME_MODE_MSG "Renaming symbols in static library only")
         endif()
         
-        # Create post-install custom command that runs after installation
+        # Post-install hook that actually invokes the renaming script.
         install(CODE "
             message(STATUS \"Running symbol renaming post-install...\")
             message(STATUS \"Mode: ${RENAME_MODE_MSG}\")
-            
-            # Verify installation directory exists and has proper structure
+
             if(NOT EXISTS \"${CMAKE_INSTALL_PREFIX}/lib\")
                 message(FATAL_ERROR \"Installation directory structure incomplete: ${CMAKE_INSTALL_PREFIX}/lib not found\")
             endif()
-            
-            # Check if Python is available
+
             find_program(PYTHON_EXECUTABLE python3 python)
             if(NOT PYTHON_EXECUTABLE)
                 message(WARNING \"Python not found. Skipping symbol renaming.\")
                 return()
             endif()
-            
-            # Check if rename_symbols.py exists
+
             set(RENAME_SCRIPT \"${CMAKE_SOURCE_DIR}/rename_symbols.py\")
             if(NOT EXISTS \"\${RENAME_SCRIPT}\")
                 message(WARNING \"Symbol renaming script not found: \${RENAME_SCRIPT}\")
                 message(STATUS \"Skipping symbol renaming.\")
                 return()
             endif()
-            
-            # Run the symbol renaming script with appropriate options
+
             if(\"${BUILD_SHARED_LIBS}\" STREQUAL \"ON\")
                 message(STATUS \"Executing: \${PYTHON_EXECUTABLE} \${RENAME_SCRIPT} ${CMAKE_INSTALL_PREFIX} ${SYMBOL_RENAME_PREFIX} --create-so --so-libs ${SO_ADDITIONAL_LIBS} --compiler ${CMAKE_C_COMPILER} --linker-flags \\\"${CMAKE_SHARED_LINKER_FLAGS}\\\"\")
                 execute_process(
@@ -549,7 +583,6 @@ function(add_symbol_renaming_target)
                 )
             endif()
             
-            # Check if renaming was successful
             if(RENAME_RESULT EQUAL 0)
                 message(STATUS \"Symbol renaming completed successfully!\")
                 message(STATUS \"Original libraries preserved in: ${CMAKE_INSTALL_PREFIX}/lib\")
@@ -583,10 +616,8 @@ function(add_symbol_renaming_target)
     endif()
 endfunction()
 
-# Call the function to set up symbol renaming
 add_symbol_renaming_target()
 
-# Add test subdirectory if tests are enabled
 if(ENABLE_TESTS)
     enable_testing()
     add_subdirectory(test)
