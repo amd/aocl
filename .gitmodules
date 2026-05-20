@@ -44,3 +44,6 @@
 [submodule "submodules/aocl-dlp"]
 	path = submodules/aocl-dlp
 	url = https://github.com/amd/aocl-dlp.git
+[submodule "submodules/openrng"]
+	path = submodules/openrng
+	url = https://github.com/amd/openrng.git
