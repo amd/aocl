@@ -241,6 +241,15 @@ AOCL userguide document.
 To set up and use Build-It-Yourself, you must clone the repository,
 configure the build options, and build the unified binary.
 
+### Clone the Repository
+
+First, clone the AOCL repository from GitHub:
+
+``` console
+$ git clone https://github.com/amd/aocl.git
+$ cd aocl
+```
+
 ### Configure the Build Options
 
 There are multiple CMake options you can configure. The following
@@ -409,7 +418,15 @@ OpenMP library.
 
 Complete the following steps to build and install a single-thread AOCL:
 
-1.  Configure the library as required:
+1.  Clone the AOCL from Git repository
+    (<https://github.com/amd/aocl.git>).
+
+    ``` bash
+    $ git clone https://github.com/amd/aocl.git
+    $ cd aocl
+    ```
+
+2.  Configure the library as required:
 
     ``` bash
     # CMake commands
@@ -437,7 +454,15 @@ Complete the following steps to build and install a single-thread AOCL:
 
 Complete the following steps to install a multi-thread AOCL:
 
-1.  Configure the library as required:
+1.  Clone the AOCL from Git repository
+    (<https://github.com/amd/aocl.git>).
+
+    ``` bash
+    $ git clone https://github.com/amd/aocl.git
+    $ cd aocl
+    ```
+
+2.  Configure the library as required:
 
     ``` bash
     # CMake commands
