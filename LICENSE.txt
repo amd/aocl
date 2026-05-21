@@ -1,19 +1,21 @@
-AOCL BUILD-IT-YOURSELF (BIY) – LICENSE
-Version: v5.2.2
+AOCL Build it Yourself – LICENSE  (v5.3)
 
-Copyright (c) 2019 – present
-Advanced Micro Devices, Inc. All rights reserved.
+Preamble
+--------
+This distribution of AOCL Build it Yourself (“AOCL BIY”) v.5.3 is released by Advanced Micro Devices, Inc. (“AMD”) under the MIT License for AMD contributed code in this repository. Third party components included in AOCL BIY retain their original licenses and notices, as listed in the accompanying NOTICE file. Redistribution of AOCL BIY must include this LICENSE AND accompanying NOTICE file.
 
-This distribution of AOCL Build It Yourself (“AOCL BIY”) includes AMD contributed software released under the MIT License.
 
-Third party software included in this distribution is governed by separate licenses and attribution requirements, which are documented in the accompanying NOTICE file. Third party notices are provided for informational purposes only and do not modify the license terms applicable to AMD contributed code.
+ AMD Contributions (MIT)
+----------------------------------
+AMD copyrighted code (MIT)
 
-=========================================================================
+Copyright (c) 2019 – present Advanced Micro Devices, Inc. All rights reserved.
+License: MIT (SPDX: MIT)
+
+AMD contributions are provided under the MIT License for this distribution. Certain AMD-origin components may include historical notices referencing prior open source licenses (including BSD-3-Clause and NCSA). Such notices are retained for attribution purposes only and do not alter the MIT license grant applicable to AMD contributions in this distribution. Third-party and upstream code continue to be governed by their respective licenses.
+
 MIT License
-=========================================================================
-
+-----------
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON INFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

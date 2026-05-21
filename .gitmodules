@@ -38,3 +38,9 @@
 	path = submodules/aocl-data-analytics
 	url = https://github.com/amd/aocl-data-analytics.git
 	branch = main
+[submodule "submodules/aocl-fftz"]
+	path = submodules/aocl-fftz
+	url = https://github.com/amd/aocl-fftz.git
+[submodule "submodules/aocl-dlp"]
+	path = submodules/aocl-dlp
+	url = https://github.com/amd/aocl-dlp.git
