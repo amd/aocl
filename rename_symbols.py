@@ -1607,11 +1607,20 @@ def rename_prototypes_in_header_fast(header_path, symbol_mapping, namespace_rena
     if inferred_prefix:
         content = apply_cblas_enum_renames(content, inferred_prefix)
 
-    # Rename OpenRNG VSL_* macros and VSLBRngProperties typedef so the
-    # renamed openrng.h coexists with other vendors' VSL-style headers
-    # in a single translation unit.
-    if inferred_prefix:
-        content = apply_openrng_macro_renames(content, inferred_prefix)
+    # Rename VSL macros/typedefs in openrng.h for vendor header coexistence.
+    # In OpenRNG-only builds inferred_prefix is '' (no cblas_/blis_ families);
+    # fall back to deriving the prefix from vsl* function renames.
+    _openrng_rename_prefix = inferred_prefix
+    if not _openrng_rename_prefix and os.path.basename(header_path) == 'openrng.h':
+        for _sym, _new in symbol_mapping.items():
+            if (isinstance(_sym, str) and isinstance(_new, str)
+                    and _sym.startswith('vsl')
+                    and _new.endswith(_sym)
+                    and len(_new) > len(_sym)):
+                _openrng_rename_prefix = _new[:-len(_sym)]
+                break
+    if _openrng_rename_prefix:
+        content = apply_openrng_macro_renames(content, _openrng_rename_prefix)
 
     # Patch BLIS_FUNC_PREFIX_STR string literal to match the renamed prefix
     # (used by downstream code that constructs symbol names at runtime).
