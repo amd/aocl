@@ -14,7 +14,8 @@ of multiple AOCL libraries.
 
 Currently, Build-It-Yourself supports selection of AOCL-BLAS,
 AOCL-Utils, AOCL-LAPACK, AOCL-Sparse, AOCL-LibM, AOCL-Compression,
-AOCL-Cryptography, AOCL-Data-Analytics, and AOCL-LibMem libraries only.
+AOCL-Cryptography, AOCL-Data-Analytics, AOCL-LibMem, and OpenRNG
+libraries only.
 
 Additionally, we provide all AOCL library sources as git submodules in 
 the `submodules` branch of this repository. This enables offline development 
@@ -63,6 +64,7 @@ The project is structured as follows:
 - `aocl_libflame_build.cmake`: CMake script for building AOCL-LAPACK.
 - `aocl_libm_build.cmake`: CMake script for building AOCL-LIBM.
 - `aocl_libmem_build.cmake`: CMake script for building AOCL-LIBMEM.
+- `aocl_openrng_build.cmake`: CMake script for building OpenRNG.
 - `aocl_sparse_build.cmake`: CMake script for building AOCL-SPARSE.
 - `aocl_utils_build.cmake`: CMake script for building AOCL-UTILS.
 - `CMakeLists.txt`: Main CMake script for the AOCL project.
@@ -96,7 +98,7 @@ $ cd aocl/submodules  # Navigate to AOCL library sources
 ```
 
 The git submodules include: AOCL-BLAS, AOCL-Compression, AOCL-Cryptography, AOCL-DA, AOCL-LAPACK, 
-AOCL-LibM, AOCL-LibMem, AOCL-ScaLAPACK, AOCL-Sparse, and AOCL-Utils.
+AOCL-LibM, AOCL-LibMem, AOCL-ScaLAPACK, AOCL-Sparse, AOCL-Utils, and OpenRNG.
 
 Alternatively, only selected submodules can be downloaded. The following table shows the mapping 
 between AOCL library names and their corresponding submodule names:
@@ -113,6 +115,7 @@ between AOCL library names and their corresponding submodule names:
 | **AOCL-ScaLAPACK**   | `submodules/aocl-scalapack`     |
 | **AOCL-Sparse**      | `submodules/aocl-sparse`        |
 | **AOCL-Utils**       | `submodules/aocl-utils`         |
+| **OpenRNG**          | `submodules/openrng`            |
 
 **Example 1: Download only AOCL-BLAS, AOCL-LAPACK, and AOCL-Utils**
 ``` console
@@ -681,6 +684,7 @@ individual AOCL libraries.
 | **ENABLE_AOCL_COMPRESSION** | `-DENABLE_AOCL_COMPRESSION=OFF` (default) or `-DENABLE_AOCL_COMPRESSION=ON` to include in the library. |
 | **ENABLE_AOCL_DA**        | `-DENABLE_AOCL_DA=OFF` (default) or `-DENABLE_AOCL_DA=ON` to include in the library. |
 | **ENABLE_AOCL_LIBMEM**    | `-DENABLE_AOCL_LIBMEM=OFF` (default) or `-DENABLE_AOCL_LIBMEM=ON` to include in the library. |
+| **ENABLE_AOCL_OPENRNG**   | `-DENABLE_AOCL_OPENRNG=OFF` (default) or `-DENABLE_AOCL_OPENRNG=ON` to include OpenRNG in the library. |
 
 ### CMake Options for Library Configuration
 
@@ -788,3 +792,4 @@ internet access.
 | **COMPRESSION_PATH**     | `-DCOMPRESSION_PATH=<Directory Path where AOCL-Compression is present>`. |
 | **DA_PATH**              | `-DDA_PATH=<Directory Path where AOCL-Data-Analytics is present>`. |
 | **LIBMEM_PATH**          | `-DLIBMEM_PATH=<Directory Path where AOCL-LibMem is present>`. |
+| **OPENRNG_PATH**         | `-DOPENRNG_PATH=<Directory Path where OpenRNG is present>`. |

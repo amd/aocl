@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2025, Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2025-2026, Advanced Micro Devices, Inc. All rights reserved.
 """
 Enhanced Symbol Renaming Script with Intelligent Case-Aware Prefixing
 
@@ -655,7 +655,8 @@ def apply_lapack_export_renames(content, api_prefix_renames):
     FLAME.h declares un-prefixed Fortran LAPACK symbols via:
         #define LAPACK_EXPORT_<name>  F77_FUNC( <name> , <NAME> )
     Those symbols are external references that objcopy never renames, so
-    mkl_lapack.h conflicts with FLAME.h on 54 "conflicting types" errors.
+    they conflict with other vendors' LAPACK headers on "conflicting
+    types" errors when both are included in the same translation unit.
     libflame_interface.hh also calls the same names directly as bare Fortran
     call sites, so both forms must be patched.
     """
@@ -715,12 +716,13 @@ def apply_cblas_enum_renames(content, prefix):
     CBLAS enum types (CBLAS_ORDER, CBLAS_TRANSPOSE, CBLAS_UPLO,
     CBLAS_DIAG, CBLAS_SIDE), their enumerator constants (CblasRowMajor, etc.),
     and LAPACK integer macros (LAPACK_ROW_MAJOR, LAPACK_COL_MAJOR) are
-    identical between AOCL and MKL.  Since they are compile-time constructs
-    (not binary symbols) they are never renamed by the object-copy pass.
+    identical across BLAS/LAPACK vendors.  Since they are compile-time
+    constructs (not binary symbols) they are never renamed by the
+    object-copy pass.
 
-    This function renames them in the copied renamed headers so that including
-    both AOCL renamed headers and MKL headers in the same translation unit
-    does not cause redefinition errors.
+    This function renames them in the copied renamed headers so that
+    including both AOCL renamed headers and another vendor's BLAS/LAPACK
+    headers in the same translation unit does not cause redefinition errors.
     """
     if not prefix:
         return content
@@ -762,6 +764,104 @@ def apply_cblas_enum_renames(content, prefix):
     for name in lapack_layout_macros:
         new_name = enum_prefix + name
         content = re.sub(rf'(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])', new_name, content)
+
+    return content
+
+def apply_openrng_macro_renames(content, prefix):
+    """Prefix OpenRNG VSL_* macros and the VSLBRngProperties typedef.
+
+    Avoids collisions when the renamed openrng.h is included alongside
+    another vendor's VSL-style headers (shared VSL_* macro names with
+    differing values; conflicting VSLBRngProperties typedef tags).
+    """
+    if not prefix:
+        return content
+
+    upper_prefix = prefix.upper()
+
+    # VSL_* macros that may be defined by other vendors' VSL headers too.
+    openrng_macros = [
+        # BRNG IDs.
+        'VSL_BRNG_ARS5', 'VSL_BRNG_DABSTRACT', 'VSL_BRNG_IABSTRACT',
+        'VSL_BRNG_MCG31', 'VSL_BRNG_MCG59', 'VSL_BRNG_MRG32K3A',
+        'VSL_BRNG_MT19937', 'VSL_BRNG_MT2203', 'VSL_BRNG_NIEDERR',
+        'VSL_BRNG_NONDETERM', 'VSL_BRNG_PHILOX4X32X10', 'VSL_BRNG_R250',
+        'VSL_BRNG_SABSTRACT', 'VSL_BRNG_SFMT19937', 'VSL_BRNG_SOBOL',
+        'VSL_BRNG_WH',
+        # Status / error codes.
+        'VSL_STATUS_OK', 'VSL_ERROR_OK',
+        'VSL_ERROR_BADARGS', 'VSL_ERROR_FEATURE_NOT_IMPLEMENTED',
+        'VSL_ERROR_MEM_FAILURE', 'VSL_ERROR_NULL_PTR',
+        'VSL_RNG_ERROR_BAD_MEM_FORMAT', 'VSL_RNG_ERROR_BAD_STREAM',
+        'VSL_RNG_ERROR_BRNG_NOT_SUPPORTED', 'VSL_RNG_ERROR_BRNGS_INCOMPATIBLE',
+        'VSL_RNG_ERROR_FILE_CLOSE', 'VSL_RNG_ERROR_FILE_OPEN',
+        'VSL_RNG_ERROR_FILE_READ', 'VSL_RNG_ERROR_FILE_WRITE',
+        'VSL_RNG_ERROR_INVALID_BRNG_INDEX',
+        'VSL_RNG_ERROR_LEAPFROG_UNSUPPORTED',
+        'VSL_RNG_ERROR_NONDETERM_NOT_SUPPORTED',
+        'VSL_RNG_ERROR_SKIPAHEADEX_UNSUPPORTED',
+        'VSL_RNG_ERROR_SKIPAHEAD_UNSUPPORTED',
+        'VSL_DISTR_MULTINOMIAL_BAD_PROBABILITY_ARRAY',
+        # Storage / QRNG / user-stream macros.
+        'VSL_MATRIX_STORAGE_DIAGONAL', 'VSL_MATRIX_STORAGE_FULL',
+        'VSL_MATRIX_STORAGE_PACKED',
+        'VSL_QRNG_OVERRIDE_1ST_DIM_INIT',
+        'VSL_USER_DIRECTION_NUMBERS', 'VSL_USER_INIT_DIRECTION_NUMBERS',
+        'VSL_USER_PRIMITIVE_POLYMS', 'VSL_USER_QRNG_INITIAL_VALUES',
+        # Distribution method selectors.
+        'VSL_RNG_METHOD_BERNOULLI_ICDF', 'VSL_RNG_METHOD_BINOMIAL_BTPE',
+        'VSL_RNG_METHOD_CAUCHY_ICDF',
+        'VSL_RNG_METHOD_EXPONENTIAL_ICDF',
+        'VSL_RNG_METHOD_EXPONENTIAL_ICDF_ACCURATE',
+        'VSL_RNG_METHOD_GAMMA_GNORM', 'VSL_RNG_METHOD_GAMMA_GNORM_ACCURATE',
+        'VSL_RNG_METHOD_GAUSSIAN_BOXMULLER',
+        'VSL_RNG_METHOD_GAUSSIAN_BOXMULLER2',
+        'VSL_RNG_METHOD_GAUSSIAN_ICDF',
+        'VSL_RNG_METHOD_GAUSSIANMV_BOXMULLER',
+        'VSL_RNG_METHOD_GAUSSIANMV_BOXMULLER2',
+        'VSL_RNG_METHOD_GAUSSIANMV_ICDF',
+        'VSL_RNG_METHOD_GEOMETRIC_ICDF',
+        'VSL_RNG_METHOD_GUMBEL_ICDF', 'VSL_RNG_METHOD_LAPLACE_ICDF',
+        'VSL_RNG_METHOD_LOGNORMAL_BOXMULLER2',
+        'VSL_RNG_METHOD_LOGNORMAL_ICDF',
+        'VSL_RNG_METHOD_MULTINOMIAL_MULTPOISSON',
+        'VSL_RNG_METHOD_POISSON_POISNORM',
+        'VSL_RNG_METHOD_POISSON_PTPE',
+        'VSL_RNG_METHOD_RAYLEIGH_ICDF',
+        'VSL_RNG_METHOD_RAYLEIGH_ICDF_ACCURATE',
+        'VSL_RNG_METHOD_UNIFORM_STD',
+        'VSL_RNG_METHOD_UNIFORM_STD_ACCURATE',
+        'VSL_RNG_METHOD_UNIFORMBITS_STD',
+        'VSL_RNG_METHOD_UNIFORMBITS32_STD',
+        'VSL_RNG_METHOD_UNIFORMBITS64_STD',
+        'VSL_RNG_METHOD_WEIBULL_ICDF',
+        'VSL_RNG_METHOD_WEIBULL_ICDF_ACCURATE',
+    ]
+    for name in openrng_macros:
+        new_name = upper_prefix + name
+        content = re.sub(
+            rf'(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])',
+            new_name,
+            content,
+        )
+
+    # Typedef names that may collide with other vendors' VSL-style headers.
+    # The leading-underscore tag form is matched separately to preserve the
+    # underscore: `_VSLBRngProperties` -> `_AOCL_VSLBRngProperties`.
+    openrng_typedefs = ['VSLBRngProperties', 'VSLStreamStatePtr']
+    for name in openrng_typedefs:
+        # Standalone occurrence (no leading underscore).
+        content = re.sub(
+            rf'(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])',
+            upper_prefix + name,
+            content,
+        )
+        # Leading-underscore tag form: keep the underscore at the front.
+        content = re.sub(
+            rf'(?<![A-Za-z0-9_])_{re.escape(name)}(?![A-Za-z0-9_])',
+            '_' + upper_prefix + name,
+            content,
+        )
 
     return content
 
@@ -1494,8 +1594,8 @@ def rename_prototypes_in_header_fast(header_path, symbol_mapping, namespace_rena
     content = apply_lapack_global_suffix_renames(content, api_prefix_renames)
 
     # Rename Fortran symbol names inside LAPACK_EXPORT_* macros and bare
-    # Fortran call sites in libflame_interface.hh, so FLAME.h coexists with
-    # mkl_lapack.h.
+    # Fortran call sites in libflame_interface.hh, so FLAME.h coexists
+    # with other vendors' LAPACK headers in the same TU.
     content = apply_lapack_export_renames(content, api_prefix_renames)
 
     # Rename CBLAS enum type names, enumerator constants, and LAPACK
@@ -1506,6 +1606,21 @@ def rename_prototypes_in_header_fast(header_path, symbol_mapping, namespace_rena
     )
     if inferred_prefix:
         content = apply_cblas_enum_renames(content, inferred_prefix)
+
+    # Rename VSL macros/typedefs in openrng.h for vendor header coexistence.
+    # In OpenRNG-only builds inferred_prefix is '' (no cblas_/blis_ families);
+    # fall back to deriving the prefix from vsl* function renames.
+    _openrng_rename_prefix = inferred_prefix
+    if not _openrng_rename_prefix and os.path.basename(header_path) == 'openrng.h':
+        for _sym, _new in symbol_mapping.items():
+            if (isinstance(_sym, str) and isinstance(_new, str)
+                    and _sym.startswith('vsl')
+                    and _new.endswith(_sym)
+                    and len(_new) > len(_sym)):
+                _openrng_rename_prefix = _new[:-len(_sym)]
+                break
+    if _openrng_rename_prefix:
+        content = apply_openrng_macro_renames(content, _openrng_rename_prefix)
 
     # Patch BLIS_FUNC_PREFIX_STR string literal to match the renamed prefix
     # (used by downstream code that constructs symbol names at runtime).

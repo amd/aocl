@@ -1,4 +1,4 @@
-// Copyright (C) 2025, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (C) 2025-2026, Advanced Micro Devices, Inc. All rights reserved.
 
 #ifndef TEST_AOCL_SYMBOLS_H
 #define TEST_AOCL_SYMBOLS_H
@@ -21,6 +21,9 @@ void test_axpby(void);
 
 // Function to test symbol renaming
 void test_symbol_renaming(void);
+
+// Function to test AOCL OpenRNG
+void test_openrng(void);
 
 #ifdef __cplusplus
 }

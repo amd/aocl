@@ -1,8 +1,8 @@
-AOCL Build it Yourself – LICENSE  (v5.3)
+AOCL Build it Yourself – LICENSE  (v5.3.1)
 
 Preamble
 --------
-This distribution of AOCL Build it Yourself (“AOCL BIY”) v.5.3 is released by Advanced Micro Devices, Inc. (“AMD”) under the MIT License for AMD contributed code in this repository. Third party components included in AOCL BIY retain their original licenses and notices, as listed in the accompanying NOTICE file. Redistribution of AOCL BIY must include this LICENSE AND accompanying NOTICE file.
+This distribution of AOCL Build it Yourself (“AOCL BIY”) v.5.3.1 is released by Advanced Micro Devices, Inc. (“AMD”) under the MIT License for AMD contributed code in this repository. Third party components included in AOCL BIY retain their original licenses and notices, as listed in the accompanying NOTICE file. Redistribution of AOCL BIY must include this LICENSE AND accompanying NOTICE file.
 
 
  AMD Contributions (MIT)
