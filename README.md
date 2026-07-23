@@ -677,7 +677,7 @@ The following table lists the CMake variable used to specify the name of the uni
 
 | CMake Variable or Option  | Usage |
 |---------------------------|---------------------------------------------------------------|
-| **AOCL_SINGLE_LIBRARY_NAME** | `-DAOCL_SINGLE_LIBRARY_NAME=<value>` to generate `lib<value>.{a,so}` on Linux and `<value>.{a,dll}` on Windows. If not specified (empty), <value> defaults to `aocl` |
+| **AOCL_SINGLE_LIBRARY_NAME** | `-DAOCL_SINGLE_LIBRARY_NAME=<value>` to generate `lib<value>.{a,so}` on Linux and `<value>.{lib,dll}` on Windows. If not specified, `<value>` defaults to `aocl` |
 
 ### CMake Options to Select Libraries
 
