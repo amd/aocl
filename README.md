@@ -48,6 +48,7 @@ build and work with the complete AOCL ecosystem without external dependencies.
     - [Usage](#usage)
     - [Examples](#examples)
   - [CMake Variables Reference](#cmake-variables-reference)
+    - [CMake Options to Change Single Library Name](#cmake-options-to-change-single-library-name)
     - [CMake Options to Select Libraries](#cmake-options-to-select-libraries)
     - [CMake Options for AMD Architecture-Specific Optimizations](#cmake-options-for-amd-architecture-specific-optimizations)
     - [CMake Options for Build Performance](#cmake-options-for-build-performance)
@@ -249,22 +250,24 @@ configure the build options, and build the unified binary.
 There are multiple CMake options you can configure. The following
 sections explain the CMake options to:
 
-1.  Include or exclude individual AOCL libraries (see
+1.  Alter the name of the generated single library (see
+    [CMake Options to Change Single Library Name](#cmake-options-to-change-single-library-name)).
+2.  Include or exclude individual AOCL libraries (see
     [CMake Options to Select Libraries](#cmake-options-to-select-libraries)).
-2.  Provide the source code for the selected libraries by using one of
+3.  Provide the source code for the selected libraries by using one of
     the following options:
     1.  Setting the path of the AOCL libraries source code (see
         [CMake Options to Set Library Source Path](#cMake-options-to-set-library-source-path))
-3.  Static or Shared Library:
+4.  Static or Shared Library:
     1.  Static Library `-DBUILD_SHARED_LIBS=OFF`
     2.  Shared Library `-DBUILD_SHARED_LIBS=ON` (default)
-4.  Select Data Type (LP64 or ILP64):
+5.  Select Data Type (LP64 or ILP64):
     1.  LP64 `-DENABLE_ILP64=OFF` (default)
     2.  ILP64 `-DENABLE_ILP64=ON`
-5.  Enable or disable threading:
+6.  Enable or disable threading:
     1.  Multithreading `-DENABLE_MULTITHREADING=ON`
     2.  Single threading `-DENABLE_MULTITHREADING=OFF` (default)
-6.  Link Desired OpenMP library using
+7.  Link Desired OpenMP library using
     `-DOpenMP_libomp_LIBRARY=<path to OpenMP library>` when,
     `-DENABLE_MULTITHREADING=ON`.
 
@@ -667,6 +670,14 @@ to configure the Build-It-Yourself AOCL project. These variables allow
 customization of the build process, including selecting libraries and
 specifying source paths. Use these options to tailor the unified AOCL
 binary to specific requirements.
+
+### CMake Options to Change Single Library Name
+
+The following table lists the CMake variable used to specify the name of the unified library
+
+| CMake Variable or Option  | Usage |
+|---------------------------|---------------------------------------------------------------|
+| **AOCL_SINGLE_LIBRARY_NAME** | `-DAOCL_SINGLE_LIBRARY_NAME=<value>` to generate `lib<value>.{a,so}` on Linux and `<value>.{a,dll}` on Windows. If not specified (empty), <value> defaults to `aocl` |
 
 ### CMake Options to Select Libraries
 
