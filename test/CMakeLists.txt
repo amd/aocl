@@ -84,7 +84,7 @@ add_executable(test_original_symbols EXCLUDE_FROM_ALL
     test_aocl_symbols.c
 )
 
-add_dependencies(test_original_symbols aocl)
+add_dependencies(test_original_symbols ${AOCL_SINGLE_LIBRARY_NAME})
 
 target_include_directories(test_original_symbols PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -135,7 +135,7 @@ else()
 endif()
 
 target_link_libraries(test_original_symbols PRIVATE
-    ${AOCL_INSTALL_DIR}/lib/libaocl${AOCL_LIB_SUFFIX}
+    ${AOCL_INSTALL_DIR}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${AOCL_SINGLE_LIBRARY_NAME}${AOCL_LIB_SUFFIX}
     m
     pthread
     gfortran
@@ -172,7 +172,7 @@ if(BUILD_RENAMED_TEST)
     add_executable(test_renamed_symbols EXCLUDE_FROM_ALL
         test_aocl_symbols.c
     )
-    add_dependencies(test_renamed_symbols aocl)
+    add_dependencies(test_renamed_symbols ${AOCL_SINGLE_LIBRARY_NAME})
 
     target_include_directories(test_renamed_symbols PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -220,7 +220,7 @@ if(BUILD_RENAMED_TEST)
     endif()
 
     target_link_libraries(test_renamed_symbols PRIVATE
-        ${AOCL_INSTALL_DIR}/renamed/lib/libaocl${AOCL_LIB_SUFFIX}
+        ${AOCL_INSTALL_DIR}/renamed/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${AOCL_SINGLE_LIBRARY_NAME}${AOCL_LIB_SUFFIX}
         m
         pthread
         gfortran
@@ -258,7 +258,7 @@ if(ENABLE_AOCL_UTILS OR ENABLE_AOCL_CRYPTO OR ENABLE_AOCL_DA)
         test_aocl_cpp.cpp
     )
 
-    add_dependencies(test_cpp_original_symbols aocl)
+    add_dependencies(test_cpp_original_symbols ${AOCL_SINGLE_LIBRARY_NAME})
 
     target_include_directories(test_cpp_original_symbols PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -282,7 +282,7 @@ if(ENABLE_AOCL_UTILS OR ENABLE_AOCL_CRYPTO OR ENABLE_AOCL_DA)
     endif()
 
     target_link_libraries(test_cpp_original_symbols PRIVATE
-        ${AOCL_INSTALL_DIR}/lib/libaocl${AOCL_LIB_SUFFIX}
+        ${AOCL_INSTALL_DIR}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${AOCL_SINGLE_LIBRARY_NAME}${AOCL_LIB_SUFFIX}
         m
         pthread
         gfortran
@@ -316,7 +316,7 @@ if(ENABLE_AOCL_UTILS OR ENABLE_AOCL_CRYPTO OR ENABLE_AOCL_DA)
             test_aocl_cpp.cpp
         )
 
-        add_dependencies(test_cpp_renamed_symbols aocl)
+        add_dependencies(test_cpp_renamed_symbols ${AOCL_SINGLE_LIBRARY_NAME})
 
         target_include_directories(test_cpp_renamed_symbols PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}
@@ -342,7 +342,7 @@ if(ENABLE_AOCL_UTILS OR ENABLE_AOCL_CRYPTO OR ENABLE_AOCL_DA)
         endif()
 
         target_link_libraries(test_cpp_renamed_symbols PRIVATE
-            ${AOCL_INSTALL_DIR}/renamed/lib/libaocl${AOCL_LIB_SUFFIX}
+            ${AOCL_INSTALL_DIR}/renamed/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${AOCL_SINGLE_LIBRARY_NAME}${AOCL_LIB_SUFFIX}
             m
             pthread
             gfortran
@@ -449,12 +449,12 @@ if(BUILD_RENAMED_TEST AND ENABLE_AOCL_BLAS)
     
     add_library(aocl_original ${AOCL_LIB_TYPE} IMPORTED)
     set_target_properties(aocl_original PROPERTIES
-        IMPORTED_LOCATION "${AOCL_INSTALL_DIR}/lib/libaocl${AOCL_LIB_SUFFIX}"
+        IMPORTED_LOCATION "${AOCL_INSTALL_DIR}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${AOCL_SINGLE_LIBRARY_NAME}${AOCL_LIB_SUFFIX}"
     )
     
     add_library(aocl_renamed ${AOCL_LIB_TYPE} IMPORTED)
     set_target_properties(aocl_renamed PROPERTIES
-        IMPORTED_LOCATION "${AOCL_INSTALL_DIR}/renamed/lib/libaocl${AOCL_LIB_SUFFIX}"
+        IMPORTED_LOCATION "${AOCL_INSTALL_DIR}/renamed/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${AOCL_SINGLE_LIBRARY_NAME}${AOCL_LIB_SUFFIX}"
     )
 
     add_executable(mix_libraries EXCLUDE_FROM_ALL
