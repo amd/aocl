@@ -4,7 +4,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <complex.h>
+
+/*
+ * MSVC's UCRT (used by clang-cl) does not ship a C99-compatible
+ * <complex.h>: <corecrt_math.h> defines `complex` as a macro for the
+ * legacy `_complex` struct, which collides with `float complex` syntax.
+ * Skip C/Z (complex-precision) BLAS/LAPACK tests on that platform.
+ */
+#if defined(_MSC_VER)
+#  define AOCL_TEST_HAS_C99_COMPLEX 0
+#else
+#  include <complex.h>
+#  define AOCL_TEST_HAS_C99_COMPLEX 1
+#endif
+
 #include "test_aocl_symbols.h"
 
 // Include BLAS/LAPACK headers from install path (conditionally based on enabled libraries)
@@ -28,8 +41,25 @@
 #endif
 
 #ifdef ENABLE_CRYPTO
+/*
+ * cblas.h does `typedef gint_t bool;` (NOT a macro). alcp/types.h then does
+ *     #ifndef bool
+ *     typedef enum { false, true } bool;
+ *     #endif
+ * Because the cblas typedef does not define a *macro* `bool`, alcp's guard
+ * misfires and a typedef redefinition error follows. Briefly define a `bool`
+ * macro to satisfy the alcp guard, then undef it.
+ */
+#  ifndef bool
+#    define bool bool
+#    define _AOCL_TEST_DEFINED_BOOL_MACRO
+#  endif
 #include "alci/alci.h"
 #include "alcp/cipher.h"
+#  ifdef _AOCL_TEST_DEFINED_BOOL_MACRO
+#    undef bool
+#    undef _AOCL_TEST_DEFINED_BOOL_MACRO
+#  endif
 #endif
 
 #ifdef ENABLE_DA
@@ -40,16 +70,10 @@
 #include "openrng.h"
 #endif
 
-#ifdef ENABLE_CRYPTO
-// External declarations for Crypto functions
-extern Uint64 ALCP_CIPHER_CONTEXT_SIZE(void);
-extern alc_error_t ALCP_CIPHER_REQUEST(alc_cipher_mode_t mode, alc_key_len_t keyLen, alc_cipher_handle_p handle);
-extern alc_error_t ALCP_CIPHER_INIT(alc_cipher_handle_p handle, const Uint8* key, Uint32 keyLen, const Uint8* iv, Uint32 ivLen);
-extern alc_error_t ALCP_CIPHER_ENCRYPT(alc_cipher_handle_p handle, const Uint8* plaintext, Uint8* ciphertext, Uint64 len, Uint64* outlen);
-extern alc_error_t ALCP_CIPHER_DECRYPT(alc_cipher_handle_p handle, const Uint8* ciphertext, Uint8* plaintext, Uint64 len, Uint64* outlen);
-extern alc_error_t ALCP_CIPHER_FINISH(alc_cipher_handle_p handle);
-extern int ALCP_IS_ERROR(alc_error_t err);
-#endif
+/* NOTE: The AOCL-Crypto functions are declared by <alcp/cipher.h> (included
+ * above) in both original and renamed builds, so no manual extern block is
+ * needed here. A manual block would also have to be placed after the prefix
+ * macros below (it references renamed types like alc_error_t). */
 
 #ifdef ENABLE_LIBMEM
 // External declarations for LibMem functions
@@ -91,6 +115,43 @@ extern size_t AMD_STRLEN(const char* s);
 #define PREFIX_LOWER(name) CONCAT(SYMBOL_PREFIX_TOKEN_LOWER, name)
 
 #ifdef USE_RENAMED_SYMBOLS
+    // ---------------------------------------------------------------------
+    // AOCL library TYPE and ENUM-CONSTANT names that the header rewrite
+    // prefixes to <prefix><name> (e.g. av1_alc_error_t, av1_da_status).
+    // Function names are handled separately below. Types the rename engines
+    // leave UNCHANGED (alc_cipher_handle_p/_t, Uint8/16/32/64, au_cpu_num_t,
+    // AU_CURRENT_CPU_NUM) are intentionally NOT listed so they stay bare.
+    // Verified against the actually-installed renamed headers on both the
+    // Linux (Python) and Windows (PowerShell) rename engines.
+    // ---------------------------------------------------------------------
+    // Crypto
+    #define alc_error_t                 PREFIX_LOWER(alc_error_t)
+    #define alc_cipher_mode_t           PREFIX_LOWER(alc_cipher_mode_t)
+    #define alc_key_len_t               PREFIX_LOWER(alc_key_len_t)
+    #define ALC_AES_MODE_CFB            PREFIX_LOWER(ALC_AES_MODE_CFB)
+    #define ALC_KEY_LEN_128             PREFIX_LOWER(ALC_KEY_LEN_128)
+    // Sparse
+    #define aoclsparse_mat_descr        PREFIX_LOWER(aoclsparse_mat_descr)
+    #define aoclsparse_status           PREFIX_LOWER(aoclsparse_status)
+    #define aoclsparse_status_success   PREFIX_LOWER(aoclsparse_status_success)
+    #define aoclsparse_operation_none   PREFIX_LOWER(aoclsparse_operation_none)
+    // Compression
+    #define aocl_compression_desc       PREFIX_LOWER(aocl_compression_desc)
+    #define LZ4                         PREFIX_LOWER(LZ4)
+    // Data analytics
+    #define da_handle                   PREFIX_LOWER(da_handle)
+    #define da_status                   PREFIX_LOWER(da_status)
+    #define da_int                      PREFIX_LOWER(da_int)
+    #define da_status_success           PREFIX_LOWER(da_status_success)
+    #define da_handle_pca               PREFIX_LOWER(da_handle_pca)
+    #define da_handle_kmeans            PREFIX_LOWER(da_handle_kmeans)
+    #define da_handle_linmod            PREFIX_LOWER(da_handle_linmod)
+    #define da_handle_interpolation     PREFIX_LOWER(da_handle_interpolation)
+    #define da_handle_uninitialized     PREFIX_LOWER(da_handle_uninitialized)
+    #define column_major                PREFIX_LOWER(column_major)
+    #define da_axis_col                 PREFIX_LOWER(da_axis_col)
+    #define interpolation_cubic_spline  PREFIX_LOWER(interpolation_cubic_spline)
+
     // BLAS functions with uppercase names - dynamically created with prefix
     #define SGEMM_FUNC PREFIX_UPPER(SGEMM)
     #define DGEMM_FUNC PREFIX_UPPER(DGEMM)
@@ -128,18 +189,25 @@ extern size_t AMD_STRLEN(const char* s);
     #define CBLAS_CAXPBY PREFIX_LOWER(cblas_caxpby)
     #define CBLAS_ZAXPBY PREFIX_LOWER(cblas_zaxpby)
 
-    // CBLAS enum constants (renamed with uppercase prefix, e.g. <prefix>_CblasColMajor)
-    #define CblasRowMajor  CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasRowMajor)
-    #define CblasColMajor  CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasColMajor)
-    #define CblasNoTrans   CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasNoTrans)
-    #define CblasTrans     CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasTrans)
-    #define CblasConjTrans CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasConjTrans)
-    #define CblasUpper     CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasUpper)
-    #define CblasLower     CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasLower)
-    #define CblasNonUnit   CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasNonUnit)
-    #define CblasUnit      CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasUnit)
-    #define CblasLeft      CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasLeft)
-    #define CblasRight     CONCAT(SYMBOL_PREFIX_TOKEN_UPPER, CblasRight)
+    // CBLAS enum constants. The renamed cblas.h may prefix the enumerators
+    // (Windows CMake rename rewrites CblasColMajor -> AOCL_CblasColMajor for
+    // header coexistence) or leave them untouched (Linux Python rename). Either
+    // way, the CBLAS standard fixes these to constant integer values, so we map
+    // the plain names directly to those values. cblas.h is already included
+    // above, so these macros only affect the call sites below -- not the enum
+    // declaration -- and work identically for every rename prefix without any
+    // configure-time header inspection.
+    #define CblasRowMajor  101
+    #define CblasColMajor  102
+    #define CblasNoTrans   111
+    #define CblasTrans     112
+    #define CblasConjTrans 113
+    #define CblasUpper     121
+    #define CblasLower     122
+    #define CblasNonUnit   131
+    #define CblasUnit      132
+    #define CblasLeft      141
+    #define CblasRight     142
 
     // LAPACK functions
     #define SGETRF_FUNC PREFIX_UPPER(SGETRF)
@@ -501,6 +569,7 @@ void test_gemm(void) {
         if (passed) printf("   ✓ DGEMM PASSED\n");
     }
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== CGEMM (Complex Single Precision) ==========
     {
         float complex alpha_c = 1.0f + 0.0f*I;
@@ -515,7 +584,9 @@ void test_gemm(void) {
         // Just verify it doesn't crash and produces some result
         printf("   ✓ CGEMM executed (result: %.2f%+.2fi)\n", crealf(C_c[0]), cimagf(C_c[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== ZGEMM (Complex Double Precision) ==========
     {
         double complex alpha_z = 1.0 + 0.0*I;
@@ -529,6 +600,7 @@ void test_gemm(void) {
         
         printf("   ✓ ZGEMM executed (result: %.2f%+.2fi)\n", creal(C_z[0]), cimag(C_z[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
     // Test CBLAS versions
     printf("\n=== Testing CBLAS GEMM variants ===\n");
@@ -575,6 +647,7 @@ void test_gemm(void) {
         if (passed) printf("   ✓ CBLAS_DGEMM PASSED\n");
     }
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // CBLAS_CGEMM test
     {
         float complex alpha_c = 1.0f + 0.0f*I;
@@ -588,7 +661,9 @@ void test_gemm(void) {
                     m, n, k, &alpha_c, A_c, lda, B_c, ldb, &beta_c, C_c, ldc);
         printf("   ✓ CBLAS_CGEMM executed (result: %.2f%+.2fi)\n", crealf(C_c[0]), cimagf(C_c[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // CBLAS_ZGEMM test
     {
         double complex alpha_z = 1.0 + 0.0*I;
@@ -602,6 +677,7 @@ void test_gemm(void) {
                     m, n, k, &alpha_z, A_z, lda, B_z, ldb, &beta_z, C_z, ldc);
         printf("   ✓ CBLAS_ZGEMM executed (result: %.2f%+.2fi)\n", creal(C_z[0]), cimag(C_z[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
     if (passed) {
         printf("\n✓ All GEMM tests PASSED!\n");
@@ -639,6 +715,7 @@ void test_trsm(void) {
         printf("   ✓ DTRSM executed (result: %.2f)\n", B_d[0]);
     }
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== CTRSM (Complex Single Precision) ==========
     {
         float complex alpha_c = 1.0f + 0.0f*I;
@@ -649,7 +726,9 @@ void test_trsm(void) {
         CTRSM_FUNC(&side, &uplo, &transa, &diag, &m, &n, &alpha_c, A_c, &lda, B_c, &ldb);
         printf("   ✓ CTRSM executed (result: %.2f%+.2fi)\n", crealf(B_c[0]), cimagf(B_c[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== ZTRSM (Complex Double Precision) ==========
     {
         double complex alpha_z = 1.0 + 0.0*I;
@@ -660,6 +739,7 @@ void test_trsm(void) {
         ZTRSM_FUNC(&side, &uplo, &transa, &diag, &m, &n, &alpha_z, A_z, &lda, B_z, &ldb);
         printf("   ✓ ZTRSM executed (result: %.2f%+.2fi)\n", creal(B_z[0]), cimag(B_z[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
     // Test CBLAS versions
     printf("\n=== Testing CBLAS TRSM variants ===\n");
@@ -688,6 +768,7 @@ void test_trsm(void) {
         printf("   ✓ CBLAS_DTRSM executed (result: %.2f)\n", B_d[0]);
     }
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // CBLAS_CTRSM test
     {
         float complex alpha_c = 1.0f + 0.0f*I;
@@ -699,7 +780,9 @@ void test_trsm(void) {
                     m, n, &alpha_c, A_c, lda, B_c, ldb);
         printf("   ✓ CBLAS_CTRSM executed (result: %.2f%+.2fi)\n", crealf(B_c[0]), cimagf(B_c[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // CBLAS_ZTRSM test
     {
         double complex alpha_z = 1.0 + 0.0*I;
@@ -711,6 +794,7 @@ void test_trsm(void) {
                     m, n, &alpha_z, A_z, lda, B_z, ldb);
         printf("   ✓ CBLAS_ZTRSM executed (result: %.2f%+.2fi)\n", creal(B_z[0]), cimag(B_z[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
     printf("\n✓ All TRSM tests completed!\n");
 }
@@ -747,6 +831,7 @@ void test_gemv(void) {
         printf("   ✓ DGEMV executed (result: %.2f)\n", y_d[0]);
     }
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== CGEMV (Complex Single Precision) ==========
     {
         float complex alpha_c = 1.0f + 0.0f*I;
@@ -759,7 +844,9 @@ void test_gemv(void) {
         CGEMV_FUNC(&trans, &m, &n, &alpha_c, A_c, &lda, x_c, &incx, &beta_c, y_c, &incy);
         printf("   ✓ CGEMV executed (result: %.2f%+.2fi)\n", crealf(y_c[0]), cimagf(y_c[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== ZGEMV (Complex Double Precision) ==========
     {
         double complex alpha_z = 1.0 + 0.0*I;
@@ -772,6 +859,7 @@ void test_gemv(void) {
         ZGEMV_FUNC(&trans, &m, &n, &alpha_z, A_z, &lda, x_z, &incx, &beta_z, y_z, &incy);
         printf("   ✓ ZGEMV executed (result: %.2f%+.2fi)\n", creal(y_z[0]), cimag(y_z[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
     // Test CBLAS versions
     printf("\n=== Testing CBLAS GEMV variants ===\n");
@@ -800,6 +888,7 @@ void test_gemv(void) {
         printf("   ✓ CBLAS_DGEMV executed (result: %.2f)\n", y_d[0]);
     }
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // CBLAS_CGEMV test
     {
         float complex alpha_c = 1.0f + 0.0f*I;
@@ -812,7 +901,9 @@ void test_gemv(void) {
         CBLAS_CGEMV(CblasColMajor, CblasNoTrans, m, n, &alpha_c, A_c, lda, x_c, incx, &beta_c, y_c, incy);
         printf("   ✓ CBLAS_CGEMV executed (result: %.2f%+.2fi)\n", crealf(y_c[0]), cimagf(y_c[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // CBLAS_ZGEMV test
     {
         double complex alpha_z = 1.0 + 0.0*I;
@@ -825,6 +916,7 @@ void test_gemv(void) {
         CBLAS_ZGEMV(CblasColMajor, CblasNoTrans, m, n, &alpha_z, A_z, lda, x_z, incx, &beta_z, y_z, incy);
         printf("   ✓ CBLAS_ZGEMV executed (result: %.2f%+.2fi)\n", creal(y_z[0]), cimag(y_z[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
     printf("\n✓ All GEMV tests completed!\n");
 }
@@ -857,6 +949,7 @@ void test_axpby(void) {
         printf("   ✓ DAXPBY executed (y[0] = %.2f)\n", y_d[0]);
     }
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== CAXPBY (Complex Single Precision) ==========
     {
         float complex alpha_c = 2.0f + 0.0f*I;
@@ -868,7 +961,9 @@ void test_axpby(void) {
         CBLAS_CAXPBY(n, &alpha_c, x_c, incx, &beta_c, y_c, incy);
         printf("   ✓ CAXPBY executed (y[0] = %.2f%+.2fi)\n", crealf(y_c[0]), cimagf(y_c[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== ZAXPBY (Complex Double Precision) ==========
     {
         double complex alpha_z = 2.0 + 0.0*I;
@@ -880,6 +975,7 @@ void test_axpby(void) {
         CBLAS_ZAXPBY(n, &alpha_z, x_z, incx, &beta_z, y_z, incy);
         printf("   ✓ ZAXPBY executed (y[0] = %.2f%+.2fi)\n", creal(y_z[0]), cimag(y_z[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
     printf("\n✓ All AXPBY tests completed!\n");
 }
@@ -912,6 +1008,7 @@ void test_lapack_getrf(void) {
         printf("   ✓ DGETRF executed (info = %d)\n", info);
     }
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== CGETRF (Complex Single Precision) ==========
     {
         float complex A_c[] = {1.0f+0.0f*I, 4.0f+0.0f*I, 7.0f+0.0f*I,
@@ -922,7 +1019,9 @@ void test_lapack_getrf(void) {
         CGETRF_FUNC(&m, &n, A_c, &lda, ipiv, &info);
         printf("   ✓ CGETRF executed (info = %d)\n", info);
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== ZGETRF (Complex Double Precision) ==========
     {
         double complex A_z[] = {1.0+0.0*I, 4.0+0.0*I, 7.0+0.0*I,
@@ -933,6 +1032,7 @@ void test_lapack_getrf(void) {
         ZGETRF_FUNC(&m, &n, A_z, &lda, ipiv, &info);
         printf("   ✓ ZGETRF executed (info = %d)\n", info);
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
     printf("\n✓ All GETRF tests completed!\n");
 }
@@ -963,6 +1063,7 @@ void test_lapack_potrf(void) {
         printf("   ✓ DPOTRF executed (info = %d)\n", info);
     }
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== CPOTRF (Complex Single Precision) ==========
     {
         float complex A_c[] = {4.0f+0.0f*I, 2.0f+0.0f*I, 1.0f+0.0f*I,
@@ -973,7 +1074,9 @@ void test_lapack_potrf(void) {
         CPOTRF_FUNC(&uplo, &n, A_c, &lda, &info);
         printf("   ✓ CPOTRF executed (info = %d)\n", info);
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== ZPOTRF (Complex Double Precision) ==========
     {
         double complex A_z[] = {4.0+0.0*I, 2.0+0.0*I, 1.0+0.0*I,
@@ -984,6 +1087,7 @@ void test_lapack_potrf(void) {
         ZPOTRF_FUNC(&uplo, &n, A_z, &lda, &info);
         printf("   ✓ ZPOTRF executed (info = %d)\n", info);
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
     printf("\n✓ All POTRF tests completed!\n");
 }
@@ -1034,6 +1138,7 @@ void test_lapack_gesvd(void) {
         free(work);
     }
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== CGESVD (Complex Single Precision) ==========
     {
         float complex A_c[] = {1.0f+0.0f*I, 4.0f+0.0f*I, 2.0f+0.0f*I, 5.0f+0.0f*I, 3.0f+0.0f*I, 6.0f+0.0f*I};
@@ -1052,7 +1157,9 @@ void test_lapack_gesvd(void) {
         printf("   ✓ CGESVD executed (info = %d, S[0] = %.4f)\n", info, S_c[0]);
         free(work);
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== ZGESVD (Complex Double Precision) ==========
     {
         double complex A_z[] = {1.0+0.0*I, 4.0+0.0*I, 2.0+0.0*I, 5.0+0.0*I, 3.0+0.0*I, 6.0+0.0*I};
@@ -1071,6 +1178,7 @@ void test_lapack_gesvd(void) {
         printf("   ✓ ZGESVD executed (info = %d, S[0] = %.4f)\n", info, S_z[0]);
         free(work);
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
     printf("\n✓ All GESVD tests completed!\n");
 }
@@ -1103,6 +1211,7 @@ void test_lapack_gesv(void) {
         printf("   ✓ DGESV executed (info = %d, x[0] = %.4f)\n", info, B_d[0]);
     }
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== CGESV (Complex Single Precision) ==========
     {
         float complex A_c[] = {1.0f+0.0f*I, 4.0f+0.0f*I, 7.0f+0.0f*I,
@@ -1114,7 +1223,9 @@ void test_lapack_gesv(void) {
         CGESV_FUNC(&n, &nrhs, A_c, &lda, ipiv, B_c, &ldb, &info);
         printf("   ✓ CGESV executed (info = %d, x[0] = %.4f%+.4fi)\n", info, crealf(B_c[0]), cimagf(B_c[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
+#if AOCL_TEST_HAS_C99_COMPLEX
     // ========== ZGESV (Complex Double Precision) ==========
     {
         double complex A_z[] = {1.0+0.0*I, 4.0+0.0*I, 7.0+0.0*I,
@@ -1126,6 +1237,7 @@ void test_lapack_gesv(void) {
         ZGESV_FUNC(&n, &nrhs, A_z, &lda, ipiv, B_z, &ldb, &info);
         printf("   ✓ ZGESV executed (info = %d, x[0] = %.4f%+.4fi)\n", info, creal(B_z[0]), cimag(B_z[0]));
     }
+#endif /* AOCL_TEST_HAS_C99_COMPLEX */
     
     printf("\n✓ All GESV tests completed!\n");
 }

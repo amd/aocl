@@ -1,25 +1,18 @@
 #!/usr/bin/env python3
-# Copyright (C) 2025-2026, Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved.
 """
-Enhanced Symbol Renaming Script with Intelligent Case-Aware Prefixing
+Symbol renaming engine (Linux) with case-aware prefixing.
 
-This script renames symbols in static libraries and creates shared libraries:
-- Static libraries (.a): objcopy (works perfectly)
-- Shared libraries (.so): Created from renamed static libraries
-- Windows libraries (.lib/.dll): llvm-objcopy (Throwing NotImplementedError)
+Renames symbols in static libraries (.a) via objcopy, then builds shared
+libraries (.so) from the renamed archives. Case-aware prefixing:
+   - UPPERCASE symbols  → UPPERCASE prefix  (DGEMM_       → AOCL_DGEMM_)
+   - lowercase symbols  → lowercase prefix  (cblas_dgemm  → aocl_cblas_dgemm)
+   - mixed-case symbols → UPPERCASE prefix  (CblasNoTrans → AOCL_CblasNoTrans)
+   - leading underscores are preserved      (_example_api → _aocl_example_api)
 
-Key Features:
-Intelligent Case-Aware Prefixing:
-   - UPPERCASE symbols → UPPERCASE prefix (DGEMM_ → AOCL_DGEMM_)
-   - lowercase symbols → lowercase prefix (cblas_dgemm → aocl_cblas_dgemm)
-    - mixed-case symbols → UPPERCASE prefix (CblasNoTrans → AOCL_CblasNoTrans)
-    - leading underscores are preserved (_example_api → _aocl_example_api)
-
-Symbol Filtering:
-    - Preserves C++ runtime/ABI and std:: symbols from renaming
-    - Renames non-std C++ mangled symbols by injecting namespace component safely
-
-Uses objcopy for symbol renaming and gcc as default compiler for creating shared libraries from renamed static libraries.
+C++ runtime/ABI and std:: symbols are preserved; other mangled C++ symbols are
+renamed by injecting the namespace component. Uses gcc (default) to link the
+shared libraries.
 """
 
 import glob
@@ -59,14 +52,9 @@ ABI_EXCLUDES = [
     r'^__gmon_start__$',
 ]
 
-# Standard C/POSIX/math library symbols that must never be renamed.
-# These appear as weak (W) defined symbols in BLIS static libraries because
-# the compiler emits them from BLIS_INLINE functions, but they are standard
-# libc/libm symbols and must retain their original names at all times.
-#
-# Built dynamically at module load by querying the installed system libraries
-# (libc, libm, libpthread) via `nm -D --defined-only`.  A small hardcoded
-# fallback set is merged in to guard against stripped or missing system libs.
+# Standard C/POSIX/math symbols that must never be renamed. They appear as weak
+# (W) defined symbols in BLIS static libraries (emitted from BLIS_INLINE
+# functions) but are libc/libm symbols and must keep their original names.
 
 def _build_stdlib_excludes_from_system():
     """Dynamically build stdlib exclusion set from installed system shared libraries.
@@ -865,6 +853,144 @@ def apply_openrng_macro_renames(content, prefix):
 
     return content
 
+# ---------------------------------------------------------------------------
+# AOCL-vs-AOCL coexistence: prefix the public enum/type identifiers of the
+# AOCL-specific libraries (DA, Sparse, Compression, Crypto, LibM). These do NOT
+# collide with MKL (so apply_cblas_enum_renames skips them) but ARE identical
+# between two renamed AOCL builds, so two renamed versions cannot be included in
+# one translation unit without prefixing them.
+# ---------------------------------------------------------------------------
+_AOCL_LIB_HEADER_MARKERS = (
+    'aoclda', 'aocl_da', 'aoclsparse', 'aocl_compression',
+    'amdlibm', 'aoclutils', 'aocl_libmem', 'libmem',
+)
+_TYPE_ENUM_NEVER = {
+    'int', 'char', 'short', 'long', 'float', 'double', 'void', 'unsigned',
+    'signed', 'const', 'volatile', 'static', 'extern', 'struct', 'union',
+    'enum', 'typedef', 'return', 'sizeof', 'size_t', 'ssize_t', 'ptrdiff_t',
+    'intptr_t', 'uintptr_t', 'wchar_t', 'bool', '_Bool', '_Complex', 'FILE',
+    'va_list', 'true', 'false', 'NULL', 'nullptr',
+    'int8_t', 'int16_t', 'int32_t', 'int64_t',
+    'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
+}
+# Short/generic lowercase words that could appear in prose/comments or as common
+# identifiers; never prefix these even if they show up as bare enum constants.
+_TYPE_ENUM_COMMON_WORDS = {
+    'on', 'off', 'yes', 'no', 'none', 'all', 'any', 'min', 'max', 'low', 'high',
+    'end', 'len', 'size', 'data', 'type', 'mode', 'base', 'zero', 'one', 'two',
+    'in', 'out', 'up', 'down', 'left', 'right', 'top', 'get', 'set', 'add', 'new',
+}
+
+def _keep_type_enum_name(n):
+    """Only prefix identifiers distinctive enough to be real library types/enums:
+    contains '_', or an uppercase acronym (LZ4/ZLIB), or a longer lowercase word.
+    Skips std types and short/common words to avoid polluting prose/comments."""
+    if (not n or n in _TYPE_ENUM_NEVER or n in _TYPE_ENUM_COMMON_WORDS
+            or n in _STRUCT_ATTR_KW
+            or n.startswith('__') or len(n) <= 1
+            or re.match(r'^_[A-Z]', n)   # reserved impl types: _Fcomplex/_Complex/_Bool
+            or not re.match(r'^[A-Za-z_]\w*$', n)):
+        return False
+    return ('_' in n) or (n.isupper() and len(n) >= 2) or (len(n) >= 5)
+
+def _is_aocl_lib_header(header_path):
+    """True for AOCL-specific library public headers (not the MKL-coexist ones)."""
+    p = header_path.replace('\\', '/').lower()
+    base = os.path.basename(p)
+    if base in ('cblas.h', 'cblas.hh', 'lapacke.h', 'lapack.h', 'openrng.h'):
+        return False
+    if '/alcp/' in p or base.startswith('alcp') or base.startswith('rng'):
+        return True
+    return any(m in base for m in _AOCL_LIB_HEADER_MARKERS)
+
+# Attribute/qualifier keywords that may sit between a struct/union keyword and
+# the actual tag name (e.g. `struct alignas(2*sizeof(double)) tag {`).
+_STRUCT_ATTR_KW = {'alignas', '_Alignas', '__attribute__', '__declspec',
+                   'packed', 'aligned'}
+
+def _strip_c_comments(s):
+    """Remove /* */ and // comments so braces/identifiers inside doc comments
+    (e.g. LaTeX \\text{tril}) don't break enum/struct body scanning or get
+    mis-collected as enum constants. Used ONLY for name collection."""
+    s = re.sub(r'/\*.*?\*/', ' ', s, flags=re.S)
+    s = re.sub(r'//[^\n]*', ' ', s)
+    return s
+
+def _last_tag_ident(pre):
+    """Given the text between a struct/union keyword and its '{', return the
+    tag identifier (last identifier that is not an attribute keyword), or None
+    for an anonymous struct. Parenthesised attribute args are dropped first."""
+    pre = re.sub(r'\([^()]*\)', ' ', pre)
+    pre = re.sub(r'\([^()]*\)', ' ', pre)  # 2nd pass for nested ()
+    for tid in reversed(re.findall(r'[A-Za-z_]\w*', pre)):
+        if tid not in _STRUCT_ATTR_KW:
+            return tid
+    return None
+
+def _collect_type_enum_names_from_content(content):
+    """Collect enum tags, enum constants, typedef names and struct/union tags.
+    Runs on a comment-stripped copy so doc-comment braces (LaTeX) and trailing
+    enumerators without a comma are handled; tolerates alignas()/attributes."""
+    names = set()
+    scan = _strip_c_comments(content)
+    # enum <tag>? { constants } <name>?  (comment-free -> body has no braces)
+    for m in re.finditer(r'\benum\b\s*(\w+)?\s*\{([^{}]*)\}\s*(\w+)?', scan, re.S):
+        if m.group(1):
+            names.add(m.group(1))
+        if m.group(3):
+            names.add(m.group(3))
+        for cm in re.finditer(r'([A-Za-z_]\w*)\s*(?:=[^,]*)?(?:,|\Z)', m.group(2)):
+            names.add(cm.group(1))
+    # typedef struct/union [attrs] [tag]? { members (<=1 nesting) } Name;
+    for m in re.finditer(
+            r'\btypedef\s+(?:struct|union)\b([^{;]*?)\{(?:[^{}]|\{[^{}]*\})*\}\s*(\w+)\s*;',
+            scan, re.S):
+        tag = _last_tag_ident(m.group(1))
+        if tag:
+            names.add(tag)
+        names.add(m.group(2))
+    # typedef <...no braces...> Name;  (simple / struct-tag typedefs)
+    for m in re.finditer(r'\btypedef\s+[^;{}]+?\b([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*;', scan):
+        names.add(m.group(1))
+    # struct/union tag references (defs, forward decls, usages), attr-tolerant.
+    scan_np = re.sub(r'\([^()]*\)', ' ', scan)
+    scan_np = re.sub(r'\([^()]*\)', ' ', scan_np)
+    for m in re.finditer(
+            r'\b(?:struct|union)\s+(?:(?:alignas|_Alignas|__attribute__|__declspec|packed|aligned)\s+)*([A-Za-z_]\w*)',
+            scan_np):
+        names.add(m.group(1))
+    return names
+
+def collect_aocl_lib_type_enum_names(header_files):
+    """Scan all AOCL-specific library headers up-front so enum/type usages stay
+    consistent across headers (a type declared in *_types.h is used elsewhere)."""
+    names = set()
+    for hp in header_files:
+        if not _is_aocl_lib_header(hp):
+            continue
+        try:
+            with open(hp, 'r', encoding='utf-8') as f:
+                c = f.read()
+        except Exception:
+            try:
+                with open(hp, 'r', encoding='latin-1') as f:
+                    c = f.read()
+            except Exception:
+                continue
+        names |= _collect_type_enum_names_from_content(c)
+    return {n for n in names if _keep_type_enum_name(n)}
+
+def apply_aocl_lib_type_enum_renames(content, prefix, names):
+    """Prefix collected AOCL-lib enum/type identifiers (whole-word) so two
+    renamed AOCL builds don't clash on their otherwise-unprefixed enums/types."""
+    if not prefix or not names:
+        return content
+    present = [n for n in names if n in content and not n.startswith(prefix)]
+    for n in sorted(present, key=len, reverse=True):
+        content = re.sub(rf'(?<![A-Za-z0-9_]){re.escape(n)}(?![A-Za-z0-9_])',
+                         prefix + n, content)
+    return content
+
 def apply_api_prefix_renames(content, api_prefix_renames):
     """Apply identifier-level API family prefix rewrites in headers.
 
@@ -973,12 +1099,82 @@ def is_std_mangled_symbol(symbol):
 
     return False
 
-def rename_mangled_symbol_with_namespace(symbol, prefix):
+def is_reserved_impl_mangled_symbol(symbol):
+    """Detect mangled symbols rooted in a reserved C++ implementation namespace
+    (libstdc++/libc++/ABI internals such as __gnu_cxx, __cxxabiv1, __gnu_debug).
+
+    The C++ standard reserves identifiers beginning with a double underscore for
+    the implementation, so a top-level namespace like __gnu_cxx belongs to the
+    standard library, NOT to AOCL. Its symbols (e.g. weak __gnu_cxx::__stoa<>
+    instantiations emitted from libstdc++ headers) must never be renamed - doing
+    so would create a private av1___gnu_cxx copy divergent from the real STL.
+    """
+    if not is_itanium_mangled_symbol(symbol):
+        return False
+    comp = _extract_first_nested_component(symbol)
+    return bool(comp) and comp.startswith('__')
+
+_TYPE_COMPONENT_REGEX_CACHE = {}
+
+def _get_type_component_regex(type_names):
+    """Build (and cache) a regex matching Itanium source-name components
+    (``<len><name>``) for AOCL type tags that must be prefixed inside mangled C++
+    symbols.
+
+    Only names >= 8 chars are used: AOCL enum/struct/union tags are long
+    (``aoclsparse_status_``, ``_aoclsparse_matrix``), whereas short typedef-to-
+    builtin names (``da_int``, ``aoclsparse_int``) resolve to Itanium builtin
+    type codes and never appear as source-names -- excluding them avoids
+    accidental substring matches inside unrelated identifiers.
+    """
+    key = frozenset(type_names) if type_names else frozenset()
+    cached = _TYPE_COMPONENT_REGEX_CACHE.get(key)
+    if cached is not None:
+        return cached
+    names = sorted((n for n in key if len(n) >= 8), key=len, reverse=True)
+    if not names:
+        result = (None, {})
+    else:
+        lookup = {f'{len(n)}{n}': n for n in names}
+        # (?<![0-9]) ensures the length digits form a complete count (not the tail
+        # of a larger number). Every alternative is length-prefixed so matches are
+        # exact, non-overlapping source-name components.
+        pattern = re.compile(r'(?<![0-9])(' + '|'.join(re.escape(t) for t in lookup) + r')')
+        result = (pattern, lookup)
+    _TYPE_COMPONENT_REGEX_CACHE[key] = result
+    return result
+
+def _prefix_mangled_type_components(symbol, prefix_token, type_names):
+    """Prefix AOCL type tags that appear as ``<len><name>`` source-name
+    components inside a mangled C++ symbol (the return / parameter types of
+    template and overloaded functions), so the renamed binary symbol matches the
+    renamed public header (whose enum/struct/typedef tags were prefixed).
+
+    Each length prefix is recomputed for the prefixed name. Itanium substitution
+    back-references (``S._``) are positional (indexes into the substitution
+    table), so changing a component's text/length does not invalidate them.
+    """
+    pattern, lookup = _get_type_component_regex(type_names)
+    if pattern is None:
+        return symbol
+
+    def _repl(m):
+        name = lookup[m.group(1)]
+        new_name = prefix_token + name
+        return f'{len(new_name)}{new_name}'
+
+    return pattern.sub(_repl, symbol)
+
+def rename_mangled_symbol_with_namespace(symbol, prefix, type_names=None):
     """Rename an Itanium mangled symbol by injecting a namespace component.
 
     Example:
         _ZN3foo3barEv + AOCL_ -> _ZN8AOCL_foo3barEv
         _ZN3foo3barEv + aocl  -> _ZN7aoclfoo3barEv
+
+    When ``type_names`` is supplied, embedded AOCL type tags (return/parameter
+    types of C++ template & overload symbols) are also prefixed so the binary
+    matches the renamed headers.
     """
     prefix_token = normalize_mangled_prefix_token(prefix)
     if not prefix_token:
@@ -992,11 +1188,21 @@ def rename_mangled_symbol_with_namespace(symbol, prefix):
     if is_std_mangled_symbol(symbol):
         return symbol
 
-    n_index = _find_nested_name_index(symbol)
-    if n_index is None:
+    # Never rename reserved implementation namespaces (__gnu_cxx, __cxxabiv1, ...).
+    if is_reserved_impl_mangled_symbol(symbol):
         return symbol
 
-    return _replace_first_nested_component(symbol, n_index, prefix_token)
+    # Rename the primary nested-name (namespace / top-level function) component.
+    n_index = _find_nested_name_index(symbol)
+    if n_index is not None:
+        symbol = _replace_first_nested_component(symbol, n_index, prefix_token)
+
+    # Also prefix embedded AOCL type tags so C++ template/overload symbols match
+    # the renamed public headers (where those tags were prefixed).
+    if type_names:
+        symbol = _prefix_mangled_type_components(symbol, prefix_token, type_names)
+
+    return symbol
 
 def should_rename_symbol(symbol, prefix="AOCL_", allowed_namespaces=None):
     """Check if a symbol should be renamed.
@@ -1032,6 +1238,11 @@ def should_rename_symbol(symbol, prefix="AOCL_", allowed_namespaces=None):
 
     # Never rename std:: APIs/symbols.
     if 'std::' in symbol or is_std_mangled_symbol(symbol):
+        return False
+
+    # Never rename reserved C++ implementation namespaces (__gnu_cxx, __cxxabiv1,
+    # etc.) - these belong to libstdc++/libc++, not to AOCL.
+    if is_reserved_impl_mangled_symbol(symbol):
         return False
     
     # If allowed_namespaces specified, only rename symbols from those namespaces
@@ -1073,9 +1284,10 @@ def get_intelligent_prefix(symbol_name, base_prefix):
     if not symbol_name or len(symbol_name) == 0:
         return base_prefix
     
-    # Check if the base prefix has a trailing underscore
-    has_trailing_underscore = base_prefix.endswith('_')
+    # Preserve the FULL trailing-underscore run (so multi-underscore prefixes like
+    # "myprefix__" stay intact, matching the C++ mangled rename and the test harness).
     clean_prefix = base_prefix.rstrip('_')
+    trailing_underscores = base_prefix[len(clean_prefix):]
     
     # Analyze symbol naming patterns
     # Pattern 0: Starts with underscore - preserve ALL leading underscores
@@ -1097,26 +1309,26 @@ def get_intelligent_prefix(symbol_name, base_prefix):
         else:
             prefix = '_' * leading_underscores + clean_prefix.upper()
         
-        # Add trailing underscore only if base_prefix had one
-        return prefix + '_' if has_trailing_underscore else prefix
+        # Preserve the caller's full trailing-underscore run.
+        return prefix + trailing_underscores
     
     # Pattern 1: All uppercase (e.g., "DGEMM_", "SSYEV_")
     if symbol_name.isupper():
         prefix = clean_prefix.upper()
-        return prefix + '_' if has_trailing_underscore else prefix
+        return prefix + trailing_underscores
     
     # Pattern 2: All lowercase (e.g., "cblas_dgemm", "bli_dgemm")
     elif symbol_name.islower():
         prefix = clean_prefix.lower()
-        return prefix + '_' if has_trailing_underscore else prefix
+        return prefix + trailing_underscores
     
     # Pattern 3: Mixed-case (e.g., "CblasNoTrans", "LAPACKE_dgetrf", "getMaxValue")
     # Use uppercase prefix for all mixed-case symbols
     else:
         prefix = clean_prefix.upper()
-        return prefix + '_' if has_trailing_underscore else prefix
+        return prefix + trailing_underscores
 
-def generate_mapping(symbols, base_prefix, map_file):
+def generate_mapping(symbols, base_prefix, map_file, type_names=None):
     """Generate mapping file for objcopy with intelligent case-aware prefixing."""
     mapping = {}
     seen_symbols = set()
@@ -1136,7 +1348,7 @@ def generate_mapping(symbols, base_prefix, map_file):
         for sym in valid_symbols:
             # C++ mangled names need namespace-aware rewriting, not textual prefixing.
             if is_itanium_mangled_symbol(sym):
-                new_name = rename_mangled_symbol_with_namespace(sym, base_prefix)
+                new_name = rename_mangled_symbol_with_namespace(sym, base_prefix, type_names=type_names)
                 intelligent_prefix = '<mangled-namespace>'
             else:
                 # Get intelligent prefix based on symbol case pattern
@@ -1394,7 +1606,7 @@ def create_shared_library(static_lib, map_file=None, output_so=None, additional_
         print(f"Error: Shared library was not created")
         return None
 
-def rename_symbols(lib_file, prefix, header_paths=None, create_so=False, so_libs=None, compiler='gcc', linker_flags=None):
+def rename_symbols(lib_file, prefix, header_paths=None, create_so=False, so_libs=None, compiler='gcc', linker_flags=None, type_names=None):
     """Main function to rename symbols in libraries.
     
     Args:
@@ -1437,7 +1649,7 @@ def rename_symbols(lib_file, prefix, header_paths=None, create_so=False, so_libs
             # For .a files, get all defined symbols (global + local)
             symbols = get_symbols_linux_static(lib_file)
         
-        symbol_mapping = generate_mapping(symbols, prefix, map_file)
+        symbol_mapping = generate_mapping(symbols, prefix, map_file, type_names=type_names)
         
         if not symbol_mapping:
             print(f"No symbols to rename in {lib_file}")
@@ -1522,7 +1734,28 @@ def find_symbols_in_header(content, symbol_mapping, compiled_pattern=None):
     
     return found_symbols
 
-def rename_prototypes_in_header_fast(header_path, symbol_mapping, namespace_renames=None, api_prefix_renames=None):
+# An #include directive's path is NOT a symbol. Without shielding it, a library
+# namespace token in the map (e.g. `alcp`) rewrites `#include <alcp/macros.h>`
+# into `#include <coexbalcp/macros.h>` -- a path that does not exist -- breaking
+# the renamed headers. Mask whole directive lines, rewrite, then restore.
+_INCLUDE_DIRECTIVE_RE = re.compile(r'^[ \t]*#[ \t]*include[^\n]*$', re.MULTILINE)
+
+def _protect_include_directives(content):
+    """Replace #include directive lines with placeholders. Returns (masked, saved)."""
+    saved = []
+    def _stash(m):
+        idx = len(saved)
+        saved.append(m.group(0))
+        return '\x02AOCLINC%d\x02' % idx
+    return _INCLUDE_DIRECTIVE_RE.sub(_stash, content), saved
+
+def _restore_include_directives(content, saved):
+    """Restore #include directive lines masked by _protect_include_directives()."""
+    for idx, directive in enumerate(saved):
+        content = content.replace('\x02AOCLINC%d\x02' % idx, directive)
+    return content
+
+def rename_prototypes_in_header_fast(header_path, symbol_mapping, namespace_renames=None, api_prefix_renames=None, type_enum_names=None, aocl_base_prefix=None):
     """ULTRA-FAST header file symbol renaming using optimized string operations.
     
     For 26K+ symbols, regex patterns are too slow. This uses:
@@ -1543,7 +1776,10 @@ def rename_prototypes_in_header_fast(header_path, symbol_mapping, namespace_rena
             return False
     
     original_content = content
-    
+
+    # Shield #include directive paths from every rewrite pass below.
+    content, _saved_includes = _protect_include_directives(content)
+
     # OPTIMIZATION 1: Filter to only symbols that ACTUALLY exist in this header
     # This reduces 26K symbols to typically 10-50 symbols per header!
     relevant_symbols = {old: new for old, new in symbol_mapping.items() if old in content}
@@ -1607,6 +1843,11 @@ def rename_prototypes_in_header_fast(header_path, symbol_mapping, namespace_rena
     if inferred_prefix:
         content = apply_cblas_enum_renames(content, inferred_prefix)
 
+    # AOCL-vs-AOCL coexistence: prefix the AOCL-specific libraries' enums/types
+    # (DA/Sparse/Compression/Crypto/LibM) so two renamed AOCL builds can coexist.
+    if type_enum_names and aocl_base_prefix and _is_aocl_lib_header(header_path):
+        content = apply_aocl_lib_type_enum_renames(content, aocl_base_prefix, type_enum_names)
+
     # Rename VSL macros/typedefs in openrng.h for vendor header coexistence.
     # In OpenRNG-only builds inferred_prefix is '' (no cblas_/blis_ families);
     # fall back to deriving the prefix from vsl* function renames.
@@ -1634,6 +1875,9 @@ def rename_prototypes_in_header_fast(header_path, symbol_mapping, namespace_rena
                 return m.group(0)
             return m.group(1) + inferred_prefix + existing + m.group(3)
         content = _func_prefix_str_re.sub(_rename_func_prefix, content)
+
+    # Restore the shielded #include directive lines verbatim.
+    content = _restore_include_directives(content, _saved_includes)
 
     if content == original_content:
         return False
@@ -1668,7 +1912,10 @@ def rename_prototypes_in_header(header_path, symbol_mapping, compiled_pattern=No
             return False
     
     original_content = content
-    
+
+    # Shield #include directive paths from the rewrite passes below.
+    content, _saved_includes = _protect_include_directives(content)
+
     try:
         # Find which symbols from our mapping exist in this header
         found_symbols = find_symbols_in_header(content, symbol_mapping, compiled_pattern)
@@ -1698,7 +1945,10 @@ def rename_prototypes_in_header(header_path, symbol_mapping, compiled_pattern=No
         content = apply_namespace_renames(content, effective_namespace_renames)
         content = apply_api_prefix_renames(content, api_prefix_renames)
         content = apply_cpp_wrapper_identifier_renames(content, header_path, api_prefix_renames)
-        
+
+        # Restore the shielded #include directive lines verbatim.
+        content = _restore_include_directives(content, _saved_includes)
+
         if total_replacements > 0 or content != original_content:
             # Write modified content
             with open(header_path, 'w', encoding='utf-8') as f:
@@ -1750,6 +2000,16 @@ def process_header_files(header_paths, symbol_mapping):
     api_prefix_renames = build_api_prefix_rename_map(symbol_mapping)
     namespace_fallback_renames = build_cpp_namespace_fallback_map(api_prefix_renames)
 
+    # AOCL-vs-AOCL coexistence: collect the AOCL-lib enum/type identifiers once
+    # (cross-header) and derive the base prefix for prefixing them.
+    aocl_type_enum_names = collect_aocl_lib_type_enum_names(all_header_files)
+    aocl_base_prefix = infer_wrapper_prefix(
+        api_prefix_renames,
+        preferred_families=('cblas_', 'lapacke_', 'blis_', 'bli_', 'da_', 'aoclsparse_'),
+    )
+    if aocl_type_enum_names and aocl_base_prefix:
+        print(f"AOCL-coexistence: prefixing {len(aocl_type_enum_names)} AOCL-lib enum/type identifiers with '{aocl_base_prefix}'")
+
     print(f"Processing {len(all_header_files)} header files with {len(symbol_mapping)} symbol mappings...")
     if namespace_renames:
         print(f"Applying {len(namespace_renames)} C++ namespace rename mapping(s): {namespace_renames}")
@@ -1763,7 +2023,7 @@ def process_header_files(header_paths, symbol_mapping):
     
     with multiprocessing.Pool(num_cores) as pool:
         # Create args for each header
-        args_list = [(header, symbol_mapping, namespace_renames, api_prefix_renames) for header in all_header_files]
+        args_list = [(header, symbol_mapping, namespace_renames, api_prefix_renames, aocl_type_enum_names, aocl_base_prefix) for header in all_header_files]
         results = pool.starmap(rename_prototypes_in_header_fast, args_list)
     
     processed_files = sum(1 for r in results if r)
@@ -1880,6 +2140,24 @@ def rename_symbols_package(install_path, prefix, create_so=False, so_libs=None, 
     
     # Get include directory
     include_dir = get_include_directory(install_path)
+
+    # Collect AOCL enum/struct/typedef tags from the ORIGINAL public headers up
+    # front, so the mangled C++ symbol rename can prefix embedded type components
+    # consistently with the header rename. This keeps C++ template/overload
+    # symbols (e.g. aoclsparse::mv<T>) resolvable against the renamed headers.
+    aocl_type_names = set()
+    try:
+        _orig_headers = []
+        for _root, _dirs, _files in os.walk(include_dir):
+            for _f in _files:
+                if _f.endswith(('.h', '.hpp', '.hxx', '.hh')):
+                    _orig_headers.append(os.path.join(_root, _f))
+        aocl_type_names = collect_aocl_lib_type_enum_names(_orig_headers)
+        if aocl_type_names:
+            print(f"Collected {len(aocl_type_names)} AOCL type tag(s) for mangled C++ symbol renaming")
+    except Exception as _e:
+        print(f"Warning: could not collect AOCL type tags for mangled rename: {_e}")
+        aocl_type_names = set()
     
     # Process each library file
     all_mappings = {}
@@ -1894,7 +2172,8 @@ def rename_symbols_package(install_path, prefix, create_so=False, so_libs=None, 
                 create_so=create_so,
                 so_libs=so_libs, 
                 compiler=compiler, 
-                linker_flags=linker_flags
+                linker_flags=linker_flags,
+                type_names=aocl_type_names
             )
             
             if mapping:
@@ -1981,19 +2260,87 @@ if __name__ == "__main__":
         print("Error: Windows platform is not currently supported.")
         print("This script is designed for Linux/Unix systems.")
         sys.exit(1)
-    
+
+    # -- CMake-native driver sub-task modes --
+    # When rename_symbols.cmake drives the rename on Linux it does the
+    # orchestration (loop, objcopy, .so re-link, prune) itself and delegates
+    # only the two regex-heavy steps to this script, which REUSES the exact
+    # same functions the full flow uses (no behaviour divergence):
+    #   --emit-map     : extract symbols from ONE library + write its objcopy map
+    #                    (incl. Option-A embedded type-tag renaming when an
+    #                     include dir is given).
+    #   --emit-headers : rewrite the (already-copied) renamed headers in place
+    #                    using a combined objcopy map (C symbols + C++ namespaces
+    #                    + CBLAS/OpenRNG enums + AOCL-vs-AOCL enum/type coexist).
+    if len(sys.argv) >= 2 and sys.argv[1] == '--emit-map':
+        # python rename_engine_linux.py --emit-map <lib_file> <prefix> <out_map> [<include_dir>]
+        if len(sys.argv) < 5:
+            print("Usage: rename_engine_linux.py --emit-map <lib_file> <prefix> <out_map> [<include_dir>]")
+            sys.exit(1)
+        _lib_file = sys.argv[2]
+        _prefix = sys.argv[3]
+        _out_map = sys.argv[4]
+        _include_dir = sys.argv[5] if len(sys.argv) > 5 else None
+        _base = os.path.basename(_lib_file)
+        if _base.endswith('.so') or '.so.' in _base:
+            _symbols = get_symbols_linux_shared(_lib_file)
+        else:
+            _symbols = get_symbols_linux_static(_lib_file)
+        _type_names = set()
+        if _include_dir and os.path.isdir(_include_dir):
+            _hdrs = []
+            for _root, _dirs, _files in os.walk(_include_dir):
+                for _f in _files:
+                    if _f.endswith(('.h', '.hpp', '.hxx', '.hh')):
+                        _hdrs.append(os.path.join(_root, _f))
+            try:
+                _type_names = collect_aocl_lib_type_enum_names(_hdrs)
+            except Exception as _e:
+                print(f"Warning: could not collect AOCL type tags: {_e}")
+                _type_names = set()
+        generate_mapping(_symbols, _prefix, _out_map, type_names=_type_names)
+        sys.exit(0)
+
+    if len(sys.argv) >= 2 and sys.argv[1] == '--emit-headers':
+        # python rename_engine_linux.py --emit-headers <combined_map> <include_dir>
+        if len(sys.argv) < 4:
+            print("Usage: rename_engine_linux.py --emit-headers <combined_map> <include_dir>")
+            sys.exit(1)
+        _map_file = sys.argv[2]
+        _include_dir = sys.argv[3]
+        _symbol_mapping = {}
+        with open(_map_file, 'r') as _mf:
+            for _line in _mf:
+                _line = _line.strip()
+                if not _line:
+                    continue
+                _sp = _line.find(' ')
+                if _sp < 1:
+                    continue
+                _symbol_mapping[_line[:_sp]] = _line[_sp + 1:]
+        _header_files = []
+        for _root, _dirs, _files in os.walk(_include_dir):
+            for _f in _files:
+                if _f.endswith(('.h', '.hpp', '.hxx', '.hh')):
+                    _header_files.append(os.path.join(_root, _f))
+        if _header_files and _symbol_mapping:
+            process_header_files(_header_files, _symbol_mapping)
+        else:
+            print("Nothing to do (no headers or empty map).")
+        sys.exit(0)
+
     if len(sys.argv) < 3:
         print("AOCL Symbol Renaming Script - Intelligent Case-Aware Prefixing")
         print("=" * 65)
-        print("\nUsage: python rename_symbols.py <package_path> <prefix> [options]")
+        print("\nUsage: python rename_engine_linux.py <package_path> <prefix> [options]")
         print("\nOptions:")
         print("  --create-so             Create shared libraries from renamed static libraries")
         print("  --so-libs 'libs'        Additional libraries (e.g., '-lgfortran -lm -lquadmath')")
         print("  --compiler <path>       Compiler to use (default: gcc)")
         print("  --linker-flags 'flags'  Linker flags to pass")
         print("\nExamples:")
-        print("  python rename_symbols.py /path/to/package AOCL_")
-        print("  python rename_symbols.py /path/to/package AOCL_ --create-so --so-libs '-lgfortran -lm'")
+        print("  python rename_engine_linux.py /path/to/package AOCL_")
+        print("  python rename_engine_linux.py /path/to/package AOCL_ --create-so --so-libs '-lgfortran -lm'")
         print("\nNote: Windows platform is not supported.")
         sys.exit(1)
 

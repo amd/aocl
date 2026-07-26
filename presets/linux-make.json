@@ -22,7 +22,7 @@
           },
           {
             "name": "aocl-linux-make-mt-ilp-nopreinv-nogemmt-config",
-            "inherits": ["linux-make", "mt", "ilp64", "shared", "complex-return-intel", "disable_trsm_preinversion", "enable_amd_aocc_flags", "disable_blas_ext_gemmt"],
+            "inherits": ["linux-make", "mt", "ilp64", "shared", "complex-return-intel", "disable_trsm_preinversion", "enable_amd_aocc_flags", "disable_blas_ext_gemmt", "enable_aocl_blas"],
             "cacheVariables": {
                 "ENABLE_AOCL_UTILS": "ON",
                 "ENABLE_AOCL_BLAS": "ON",
@@ -50,7 +50,7 @@
           },
           {
             "name": "aocl-linux-make-mt-lp-preinv-gemmt-return-intel-config",
-            "inherits": ["linux-make", "mt", "lp64", "shared", "complex-return-intel", "enable_amd_aocc_flags", "enable_trsm_preinversion", "enable_blas_ext_gemmt"],
+            "inherits": ["linux-make", "mt", "lp64", "shared", "complex-return-intel", "enable_amd_aocc_flags", "enable_trsm_preinversion", "enable_blas_ext_gemmt", "enable_aocl_blas"],
             "cacheVariables": {
                 "ENABLE_AOCL_UTILS": "ON",
                 "ENABLE_AOCL_BLAS": "ON",
@@ -63,7 +63,7 @@
           },
           {
             "name": "aocl-linux-make-mt-lp-nopreinv-gemmt-config",
-            "inherits": ["linux-make", "mt", "lp64", "shared", "complex-return-intel", "enable_amd_aocc_flags", "disable_trsm_preinversion", "enable_blas_ext_gemmt"],
+            "inherits": ["linux-make", "mt", "lp64", "shared", "complex-return-intel", "enable_amd_aocc_flags", "disable_trsm_preinversion", "enable_blas_ext_gemmt", "enable_aocl_blas"],
             "cacheVariables": {
                 "ENABLE_AOCL_UTILS": "ON",
                 "ENABLE_AOCL_BLAS": "ON",
@@ -76,7 +76,7 @@
           },
           {
             "name": "aocl-linux-make-mt-lp-preinv-gemmt-return-intel-aocc-config",
-            "inherits": ["linux-make", "mt", "lp64", "shared", "complex-return-intel", "enable_amd_aocc_flags", "enable_trsm_preinversion", "enable_blas_ext_gemmt"],
+            "inherits": ["linux-make", "mt", "lp64", "shared", "complex-return-intel", "enable_amd_aocc_flags", "enable_trsm_preinversion", "enable_blas_ext_gemmt", "enable_aocl_blas"],
             "cacheVariables": {
                 "ENABLE_AOCL_UTILS": "ON",
                 "ENABLE_AOCL_BLAS": "ON",
@@ -91,7 +91,7 @@
           },
           {
             "name": "aocl-linux-make-mt-ilp-preinv-gemmt-return-intel-aocc-config",
-            "inherits": ["linux-make", "mt", "ilp64", "shared", "complex-return-intel", "enable_amd_aocc_flags", "enable_trsm_preinversion", "enable_blas_ext_gemmt"],
+            "inherits": ["linux-make", "mt", "ilp64", "shared", "complex-return-intel", "enable_amd_aocc_flags", "enable_trsm_preinversion", "enable_blas_ext_gemmt", "enable_aocl_blas"],
             "cacheVariables": {
                 "ENABLE_AOCL_UTILS": "ON",
                 "ENABLE_AOCL_BLAS": "ON",
@@ -116,10 +116,12 @@
                 "ENABLE_AOCL_COMPRESSION": "ON",
                 "ENABLE_AOCL_CRYPTO": "ON",
                 "ENABLE_AOCL_DA": "ON",
+                "ENABLE_AOCL_DLP": "ON",
                 "ENABLE_AOCL_LIBMEM": "ON",
                 "ENABLE_AOCL_OPENRNG": "ON",
+                "ENABLE_AOCL_FFTZ": "ON",
                 "OPENSSL_INSTALL_DIR": "$env{OPENSSL_INSTALL_DIR}",
-                "ENABLE_ADDON": "aocl_gemm",
+                "ENABLE_ADDON": "",
                 "CMAKE_C_COMPILER": "clang",
                 "CMAKE_CXX_COMPILER": "clang++"
             },
@@ -137,10 +139,12 @@
                 "ENABLE_AOCL_COMPRESSION": "ON",
                 "ENABLE_AOCL_CRYPTO": "ON",
                 "ENABLE_AOCL_DA": "ON",
+                "ENABLE_AOCL_DLP": "ON",
                 "ENABLE_AOCL_LIBMEM": "ON",
                 "ENABLE_AOCL_OPENRNG": "ON",
+                "ENABLE_AOCL_FFTZ": "ON",
                 "OPENSSL_INSTALL_DIR": "$env{OPENSSL_INSTALL_DIR}",
-                "ENABLE_ADDON": "aocl_gemm",
+                "ENABLE_ADDON": "",
                 "CMAKE_C_COMPILER": "clang",
                 "CMAKE_CXX_COMPILER": "clang++"
             },
@@ -158,10 +162,12 @@
                 "ENABLE_AOCL_COMPRESSION": "ON",
                 "ENABLE_AOCL_CRYPTO": "ON",
                 "ENABLE_AOCL_DA": "ON",
+                "ENABLE_AOCL_DLP": "ON",
                 "ENABLE_AOCL_LIBMEM": "ON",
                 "ENABLE_AOCL_OPENRNG": "ON",
+                "ENABLE_AOCL_FFTZ": "ON",
                 "OPENSSL_INSTALL_DIR": "$env{OPENSSL_INSTALL_DIR}",
-                "ENABLE_ADDON": "aocl_gemm",
+                "ENABLE_ADDON": "",
                 "CMAKE_C_COMPILER": "gcc",
                 "CMAKE_CXX_COMPILER": "g++"
             },
@@ -179,10 +185,12 @@
                 "ENABLE_AOCL_COMPRESSION": "ON",
                 "ENABLE_AOCL_CRYPTO": "ON",
                 "ENABLE_AOCL_DA": "ON",
+                "ENABLE_AOCL_DLP": "ON",
                 "ENABLE_AOCL_LIBMEM": "ON",
                 "ENABLE_AOCL_OPENRNG": "ON",
+                "ENABLE_AOCL_FFTZ": "ON",
                 "OPENSSL_INSTALL_DIR": "$env{OPENSSL_INSTALL_DIR}",
-                "ENABLE_ADDON": "aocl_gemm",
+                "ENABLE_ADDON": "",
                 "CMAKE_C_COMPILER": "gcc",
                 "CMAKE_CXX_COMPILER": "g++"
             },
