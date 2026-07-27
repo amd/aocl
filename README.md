@@ -712,7 +712,7 @@ cmake --build . --target test_original_symbols test_renamed_symbols -j 10
 (`test_cpp_templates_original`, from `test_aocl_cpp_templates.cpp`) when the relevant libraries are enabled, plus a 
 Fortran mixed-library test (`mix_libraries`). When symbol renaming is enabled (`-DSYMBOL_RENAME_PREFIX=<prefix>`), a 
 renamed counterpart of each is also built (`test_renamed_symbols`, `test_cpp_renamed_symbols`, 
-`test_cpp_templates_renamed`) that links the renamed libraries under `install_package/renamed/lib/`. All tests are 
+`test_cpp_templates_renamed`, `mix_libraries_renamed`) that links the renamed libraries under `install_package/renamed/lib/`. All tests are 
 registered with CTest, so running `ctest` from the `build` directory executes the full suite.
 
 In addition to runtime tests, C++ symbol/header rewrite behavior is validated by unit tests in:
@@ -988,11 +988,11 @@ the repository and branch/tag for the AOCL stable public release.
 | **LIBMEM_GIT_REPOSITORY**   | <https://github.com/amd/aocl-libmem.git>           | `-DLIBMEM_GIT_REPOSITORY=<AOCL-LibMem Repository URL>` |
 | **LIBMEM_GIT_TAG**          | `main`                                             | `-DLIBMEM_GIT_TAG=<AOCL-LibMem Git Tag or Branch Name>` |
 | **FFTZ_GIT_REPOSITORY**     | <https://github.com/amd/aocl-fftz.git>             | `-DFFTZ_GIT_REPOSITORY=<AOCL-FFTZ Repository URL>` |
-| **FFTZ_GIT_TAG**            | `main`                                             | `-DFFTZ_GIT_TAG=<AOCL-FFTZ Git Tag or Branch Name>` |
+| **FFTZ_GIT_TAG**            | `amd-main`                                         | `-DFFTZ_GIT_TAG=<AOCL-FFTZ Git Tag or Branch Name>` |
 | **OPENRNG_GIT_REPOSITORY**  | <https://github.com/amd/openrng.git>               | `-DOPENRNG_GIT_REPOSITORY=<OpenRNG Repository URL>` |
 | **OPENRNG_GIT_TAG**         | `main`                                             | `-DOPENRNG_GIT_TAG=<OpenRNG Git Tag or Branch Name>` |
 | **DLP_GIT_REPOSITORY**      | <https://github.com/amd/aocl-dlp.git>              | `-DDLP_GIT_REPOSITORY=<AOCL-DLP Repository URL>` |
-| **DLP_GIT_TAG**             | `main`                                             | `-DDLP_GIT_TAG=<AOCL-DLP Git Tag or Branch Name>` |
+| **DLP_GIT_TAG**             | `master`                                           | `-DDLP_GIT_TAG=<AOCL-DLP Git Tag or Branch Name>` |
 
 ## Known Issues
 

@@ -95,7 +95,7 @@ $itaniumStdExcludes = @(
 # round(); BLIS sup paths call printf()), so llvm-nm lists them as renameable.
 # If they enter the map they get prefixed both in the binary AND in the header
 # text rewrite (rename_headers consumes this map), producing undeclared
-# `myprefix_round` / `myprefix_printf` references in renamed/include/blis.h that break
+# `aocl_round` / `aocl_printf` references in renamed/include/blis.h that break
 # any consumer including the header directly. Keep this exact-match (the .lib
 # symbols are bare lowercase names on x64 Windows -- no leading underscore).
 $stdlibExcludeSet = [System.Collections.Generic.HashSet[string]]::new(

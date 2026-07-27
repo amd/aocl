@@ -77,7 +77,12 @@ if(ENABLE_AOCL_LAPACK)
     block()
         # Static PIC archive only -- its objects feed libaocl (and /MT on Windows).
         set(BUILD_SHARED_LIBS OFF)
-        set(ENABLE_AOCL_BLAS         ${ENABLE_AOCL_LAPACK_BLAS_COUPLING} CACHE BOOL   "" FORCE)
+        # libflame's ENABLE_AOCL_BLAS ("couple LAPACK to AOCL-BLAS") is a different
+        # knob from the BIY ENABLE_AOCL_BLAS ("include BLAS in libaocl"). Feed it as
+        # a block-scoped NORMAL var, not a cache FORCE: an inherited normal var would
+        # shadow a cache value (so FORCE never reaches libflame) and the cache write
+        # would clobber the top-level option. libflame's CMP0077 NEW honours this var.
+        set(ENABLE_AOCL_BLAS         ${ENABLE_AOCL_LAPACK_BLAS_COUPLING})
         set(ENABLE_EMBED_AOCLUTILS   OFF                         CACHE BOOL   "" FORCE)
         set(LIBAOCLUTILS_INCLUDE_PATH "${AOCL_TB_UTILS_INCLUDE_DIR}" CACHE STRING "" FORCE)
         set(ENABLE_MULTITHREADING    ${_lapack_mt}               CACHE BOOL   "" FORCE)

@@ -59,10 +59,10 @@ if(ENABLE_AOCL_DA)
     endif()
 
     # Use the newer AOCL-Utils CPUID enums (avx512_fp16, Zen6) only when the
-    # in-tree utils headers actually define them (the source falls back
-    # gracefully otherwise). Forwarded as extra C++ defines to DA's build.
+    # actually-built utils headers define them. Probe AOCL_TB_UTILS_SRC (the
+    # resolved source: submodule, UTILS_PATH, or git clone), not a fixed path.
     set(_da_cxx_flags "")
-    set(_au_enum "${AOCL_LIB_SRC}/aocl-utils/SDK/Include/Au/Cpuid/Enum.hh")
+    set(_au_enum "${AOCL_TB_UTILS_SRC}/SDK/Include/Au/Cpuid/Enum.hh")
     if(EXISTS "${_au_enum}")
         file(READ "${_au_enum}" _au_enum_txt)
         if(_au_enum_txt MATCHES "avx512_fp16")

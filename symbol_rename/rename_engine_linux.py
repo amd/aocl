@@ -73,6 +73,12 @@ def _build_stdlib_excludes_from_system():
         'pthread_create', 'pthread_join',
     ])
 
+    # Only probe the system on Linux with nm available; elsewhere (e.g. importing
+    # this module on Windows for the cross-platform unit tests) return the
+    # fallback silently instead of scanning /lib paths or invoking nm.
+    if platform.system() != 'Linux' or shutil.which('nm') is None:
+        return _FALLBACK
+
     # Candidate paths covering Debian/Ubuntu (x86_64 + aarch64) and RHEL/CentOS.
     candidates = [
         '/lib/x86_64-linux-gnu/libm.so.6',

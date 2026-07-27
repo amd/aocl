@@ -25,7 +25,7 @@ set(_AOCL_OPTIONS_INCLUDED ON)
 
 # Canonical component list (matches the ENABLE_AOCL_<C> switches / wrappers).
 set(AOCL_COMPONENTS
-    UTILS BLAS LAPACK SPARSE DA CRYPTO LIBM COMPRESSION LIBMEM OPENRNG FFTZ
+    UTILS BLAS LAPACK SPARSE DA CRYPTO LIBM COMPRESSION LIBMEM OPENRNG FFTZ DLP
     CACHE INTERNAL "AOCL component identifiers")
 
 # ---------------------------------------------------------------------------

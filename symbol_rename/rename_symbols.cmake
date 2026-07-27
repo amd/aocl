@@ -188,7 +188,7 @@ set(_MSVC_ABI_EXCLUDE_REGEXES
 # rename_engine_windows.ps1 (-Mode map). BLIS emits these as weak/COMDAT defined symbols
 # from BLIS_INLINE functions (e.g. bli_round->round(), sup paths->printf()); if
 # they enter the rename map they get prefixed in both the binary and the header
-# text rewrite, producing undeclared myprefix_round/myprefix_printf in renamed headers.
+# text rewrite, producing undeclared aocl_round/aocl_printf in renamed headers.
 # ---------------------------------------------------------------------------
 set(_STDLIB_EXCLUDE_SYMS
     # <math.h>

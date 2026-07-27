@@ -16,7 +16,7 @@ if(ENABLE_AOCL_DLP)
     # Source selection (precedence: local path > submodules > git clone).
     set(DLP_PATH "" CACHE STRING "Local path of AOCL-DLP source (parent dir containing 'aocl-dlp'); overrides submodules/git")
     set(DLP_GIT_REPOSITORY "https://github.com/amd/aocl-dlp.git" CACHE STRING "AOCL-DLP git repository (used when submodules are off and DLP_PATH is empty)")
-    set(DLP_GIT_TAG "main" CACHE STRING "AOCL-DLP git branch/tag")
+    set(DLP_GIT_TAG "master" CACHE STRING "AOCL-DLP git branch/tag")
 
     block()
         # Static PIC archive only -- its objects feed libaocl (and /MT on Windows).

@@ -17,7 +17,11 @@
               "CMAKE_BUILD_TYPE": "Release",
               "CMAKE_C_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
               "CMAKE_CXX_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
-              "OpenMP_libomp_LIBRARY": "$env{oneAPI_ROOT}/compiler/latest/lib/libiomp5md.lib"
+              "OpenMP_libomp_LIBRARY": "$env{oneAPI_ROOT}/compiler/latest/lib/libiomp5md.lib",
+              "CMAKE_Fortran_COMPILER": {
+                "type": "FILEPATH",
+                "value": "$env{oneAPI_ROOT}/compiler/latest/bin/ifx.exe"
+              }
             },
             "generator": "Ninja",
             "condition": {

@@ -421,18 +421,41 @@ endif()
 # -----------------------------------------------------------------------------
 # Fortran test : mix_libraries.F90  (only when Fortran compiler present + BLAS)
 # -----------------------------------------------------------------------------
-if(_HAS_FORTRAN AND ENABLE_AOCL_BLAS)
-    add_executable(mix_libraries EXCLUDE_FROM_ALL mix_libraries.F90)
+# Builds the original and (when a prefix is configured) renamed Fortran BLAS-interop
+# executables from one source. The renamed flavour links renamed/lib and gets the
+# prefixed symbol names from CMake, so it adapts to any prefix.
+function(_aocl_add_mix_libraries _name _renamed)
+    if(_renamed)
+        set(_lib_dir "${AOCL_INSTALL_DIR}/renamed/lib")
+    else()
+        set(_lib_dir "${AOCL_INSTALL_DIR}/lib")
+    endif()
+
+    add_executable(${_name} EXCLUDE_FROM_ALL mix_libraries.F90)
     # mix_libraries.F90 uses C-preprocessor guards (#ifdef USE_RENAMED_SYMBOLS).
     # Single-config generators (Ninja/Makefiles) auto-preprocess the .F90 via the
     # compiler, but the Visual Studio generator's Intel Fortran (.vfproj)
     # integration does NOT enable preprocessing from the extension alone -> the
-    # #ifdef guards are ignored and BOTH the original and renamed_* code paths
-    # compile, pulling in undefined renamed_dgemm/renamed_bli_* symbols. Force
+    # #ifdef guards are ignored and BOTH the original and renamed code paths
+    # compile, pulling in undefined <prefix>dgemm/<prefix>bli_* symbols. Force
     # preprocessing explicitly so the guards are honoured under every generator.
-    set_target_properties(mix_libraries PROPERTIES Fortran_PREPROCESS ON)
+    set_target_properties(${_name} PROPERTIES Fortran_PREPROCESS ON)
+
+    # Renamed flavour: enable the #ifdef path and pass the prefixed external names
+    # as object-like macros (plain substitution, not ## pasting: gfortran's
+    # traditional cpp ignores ##).
+    if(_renamed)
+        target_compile_definitions(${_name} PRIVATE
+            USE_RENAMED_SYMBOLS
+            RENAMED_PREFIX=${SYMBOL_PREFIX_LOWER}
+            RENAMED_LSAME=${SYMBOL_PREFIX_LOWER}lsame
+            RENAMED_DGEMM=${SYMBOL_PREFIX_LOWER}dgemm
+            RENAMED_BLI_NTHREADS=${SYMBOL_PREFIX_LOWER}bli_thread_get_num_threads
+        )
+    endif()
+
     if(TARGET ${AOCL_SINGLE_LIBRARY_NAME})
-        add_dependencies(mix_libraries ${AOCL_SINGLE_LIBRARY_NAME})
+        add_dependencies(${_name} ${AOCL_SINGLE_LIBRARY_NAME})
     endif()
     # Intel Fortran (ifx) on Windows defaults to /names:uppercase, so external
     # references become e.g. DGEMM / BLI_THREAD_GET_NUM_THREADS. The aggregate
@@ -449,7 +472,7 @@ if(_HAS_FORTRAN AND ENABLE_AOCL_BLAS)
         # links the dynamic runtime import libs explicitly (_AOCL_PLATFORM_SYSLIBS),
         # and mixing static+dynamic Fortran runtimes causes LNK2005 duplicate
         # symbols (for_set_fpe_, for_alloc_allocatable_handle, ...).
-        target_compile_options(mix_libraries PRIVATE /names:lowercase /MD)
+        target_compile_options(${_name} PRIVATE /names:lowercase /MD)
     endif()
     # ILP64: the AOCL BLAS Fortran (F77) interface uses 8-byte integers, so the
     # test must pass 8-byte default INTEGERs to dgemm (m, n, k, lda, ldb, ldc).
@@ -459,26 +482,33 @@ if(_HAS_FORTRAN AND ENABLE_AOCL_BLAS)
     # happened to be zero).
     if(ENABLE_ILP64)
         if(CMAKE_Fortran_COMPILER_ID MATCHES "Intel")
-            target_compile_options(mix_libraries PRIVATE -i8)
+            target_compile_options(${_name} PRIVATE -i8)
         else()
-            target_compile_options(mix_libraries PRIVATE -fdefault-integer-8)
+            target_compile_options(${_name} PRIVATE -fdefault-integer-8)
         endif()
     endif()
-    _aocl_resolve_lib_basename(_aocl_lib_base "${AOCL_INSTALL_DIR}/lib")
-    target_link_libraries(mix_libraries PRIVATE
-        "${AOCL_INSTALL_DIR}/lib/${_aocl_lib_base}"
+    _aocl_resolve_lib_basename(_aocl_lib_base "${_lib_dir}")
+    target_link_libraries(${_name} PRIVATE
+        "${_lib_dir}/${_aocl_lib_base}"
         ${_AOCL_PLATFORM_SYSLIBS}
     )
-    set(_mix_rpath "${AOCL_INSTALL_DIR}/lib")
+    set(_mix_rpath "${_lib_dir}")
     if(UNIX AND _AOCL_GCC_RUNTIME_RPATH)
         list(APPEND _mix_rpath "${_AOCL_GCC_RUNTIME_RPATH}")
     endif()
-    set_target_properties(mix_libraries PROPERTIES
+    set_target_properties(${_name} PROPERTIES
         BUILD_RPATH   "${_mix_rpath}"
         INSTALL_RPATH "${_mix_rpath}"
     )
     # Both gfortran and ifx auto-preprocess .F90 files; no extra flag needed.
-    _aocl_register_test(mix_libraries "${AOCL_INSTALL_DIR}/lib")
+    _aocl_register_test(${_name} "${_lib_dir}")
+endfunction()
+
+if(_HAS_FORTRAN AND ENABLE_AOCL_BLAS)
+    _aocl_add_mix_libraries(mix_libraries FALSE)
+    if(BUILD_RENAMED_TEST)
+        _aocl_add_mix_libraries(mix_libraries_renamed TRUE)
+    endif()
 endif()
 
 # -----------------------------------------------------------------------------
