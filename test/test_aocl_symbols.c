@@ -136,7 +136,13 @@ extern size_t AMD_STRLEN(const char* s);
     #define aoclsparse_status_success   PREFIX_LOWER(aoclsparse_status_success)
     #define aoclsparse_operation_none   PREFIX_LOWER(aoclsparse_operation_none)
     // Compression
+    // aocl_compression_desc already begins with the canonical "aocl_" prefix,
+    // so the header rewrite leaves it BARE when renaming with an "aocl_"-family
+    // prefix (see apply_aocl_lib_type_enum_renames / AOCL_COMPRESSION_DESC_KEPT_BARE
+    // in test/CMakeLists.txt). Only prefix it for non-overlapping prefixes.
+#ifndef AOCL_COMPRESSION_DESC_KEPT_BARE
     #define aocl_compression_desc       PREFIX_LOWER(aocl_compression_desc)
+#endif
     #define LZ4                         PREFIX_LOWER(LZ4)
     // Data analytics
     #define da_handle                   PREFIX_LOWER(da_handle)

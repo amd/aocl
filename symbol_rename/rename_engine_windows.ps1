@@ -70,6 +70,12 @@ if ([string]::IsNullOrEmpty($tok)) {
     exit 1
 }
 
+# Branding prefix for embedded C type tags in mangled C++ symbols. The C++
+# NAMESPACE keeps the case-preserved $tok (AOCL_aoclsparse), but type tags use
+# the lowercase branding $typeTok (aocl_aoclsparse_status) to match the renamed
+# headers. Identical for lowercase prefixes.
+$typeTok = $tok.ToLowerInvariant()
+
 # -- ABI / std exclusion patterns (mirror rename_symbols.cmake) --
 $abiExcludes = @(
     '^__gxx_personality_v0$', '^__cxa_', '^_Unwind_',
@@ -95,7 +101,7 @@ $itaniumStdExcludes = @(
 # round(); BLIS sup paths call printf()), so llvm-nm lists them as renameable.
 # If they enter the map they get prefixed both in the binary AND in the header
 # text rewrite (rename_headers consumes this map), producing undeclared
-# `aocl_round` / `aocl_printf` references in renamed/include/blis.h that break
+# `myprefix_round` / `myprefix_printf` references in renamed/include/blis.h that break
 # any consumer including the header directly. Keep this exact-match (the .lib
 # symbols are bare lowercase names on x64 Windows -- no leading underscore).
 $stdlibExcludeSet = [System.Collections.Generic.HashSet[string]]::new(
@@ -235,13 +241,21 @@ function Prefix-ItaniumTypes([string]$sym) {
     return $itaniumTypeRx.Replace($sym, {
         param($m)
         $name = $script:itaniumTypeLookup[$m.Groups[1].Value]
-        $new  = $script:tok + $name
+        # Mirror the header coexistence pass: a tag already carrying the branding
+        # prefix is left unchanged, so skip it here too.
+        if ($name.StartsWith($script:typeTok)) { return $m.Value }
+        $new  = $script:typeTok + $name
         return "$($new.Length)$new"
     })
 }
 function Prefix-MsvcTypes([string]$sym) {
     if (-not $msvcTypeRx) { return $sym }
-    return $msvcTypeRx.Replace($sym, { param($m) $script:tok + $m.Groups[1].Value })
+    return $msvcTypeRx.Replace($sym, {
+        param($m)
+        $name = $m.Groups[1].Value
+        if ($name.StartsWith($script:typeTok)) { return $m.Value }
+        return $script:typeTok + $name
+    })
 }
 
 function Is-OutermostStd([string]$sym) {
@@ -310,6 +324,25 @@ function Rename-Itanium([string]$sym) {
     $tailStart = $head.Length + $m.Groups[2].Length + $origLen
     $tail = $sym.Substring($tailStart)
     return (Prefix-ItaniumTypes ('{0}{1}{2}{3}' -f $head, $newComp.Length, $newComp, $tail))
+}
+
+function Get-IntelligentPrefixToken([string]$name) {
+    # Case-aware prefix TOKEN for a C function name. Mirrors get_intelligent_prefix
+    # in rename_engine_linux.py: lowercase names get lowercase branding, upper/mixed
+    # get uppercase; leading '_' preserved (Pattern 0). Used when a mangled symbol's
+    # FUNCTION NAME (not a namespace) is prefixed.
+    $cleanPrefix = $script:Prefix -replace '_+$', ''
+    $trailingUs  = if ($script:Prefix -match '(_+)$') { $Matches[1] } else { '' }
+    $lead = ''
+    $j = 0
+    while ($j -lt $name.Length -and $name[$j] -eq '_') { $lead += '_'; $j++ }
+    $rest = $name.Substring($j)
+    if ($rest.Length -eq 0) { return ($cleanPrefix + $trailingUs) }
+    $upper = $rest.ToUpperInvariant(); $lower = $rest.ToLowerInvariant()
+    if ($rest -ceq $upper) { $pfx = $cleanPrefix.ToUpperInvariant() }
+    elseif ($rest -ceq $lower) { $pfx = $cleanPrefix.ToLowerInvariant() }
+    else { $pfx = $cleanPrefix.ToUpperInvariant() }
+    return ($lead + $pfx + $trailingUs)
 }
 
 function Rename-Msvc([string]$sym) {
@@ -391,9 +424,25 @@ function Rename-Msvc([string]$sym) {
         $injectAt = $lastAt0 + 1
     }
 
+    # When the injection point is the FUNCTION NAME (global function / global
+    # template, no enclosing scope), the public headers rename that C function
+    # name with the case-aware intelligent prefix (lowercase for lowercase C
+    # names, e.g. da_handle_init -> aocl_da_handle_init). Use the matching prefix
+    # so global template/overload symbols resolve. A NAMESPACE scope keeps the
+    # case-preserved $tok (e.g. aoclsparse -> AOCL_aoclsparse). For lowercase
+    # user prefixes both are identical.
+    if ($injectAt -eq $opLen) {
+        $nameEnd = if ($firstAt0 -ge 0) { $firstAt0 } else { $term }
+        $fname   = $sym.Substring($opLen, $nameEnd - $opLen)
+        $useTok  = Get-IntelligentPrefixToken $fname
+    }
+    else {
+        $useTok = $tok
+    }
+
     $tail = $sym.Substring($injectAt)
-    if ($tail.StartsWith($tok)) { return (Prefix-MsvcTypes $sym) }
-    return (Prefix-MsvcTypes ($sym.Substring(0, $injectAt) + $tok + $tail))
+    if ($tail.StartsWith($useTok)) { return (Prefix-MsvcTypes $sym) }
+    return (Prefix-MsvcTypes ($sym.Substring(0, $injectAt) + $useTok + $tail))
 }
 
 function Rename-PlainC([string]$sym) {
@@ -646,7 +695,7 @@ foreach ($n in $openrngTypedefs) {
     if (-not $map.ContainsKey($tag)) { $map[$tag] = ('_' + $upperPrefix + $n) }
 }
 
-# Bug #1: Fortran routines called by inline wrappers (e.g. sgbrfsx_) that a lib declares but
+# Fix #1: Fortran routines called by inline wrappers (e.g. sgbrfsx_) that a lib declares but
 # doesn't export are absent from the map; add such 'lowercase_(' tokens with the lowercase prefix.
 $lowerPrefix = $upperPrefix.ToLowerInvariant()
 $rxFortran   = [regex]::new('(?<![A-Za-z0-9_])([a-z][a-z0-9]{2,}_)\s*\(', 'Compiled')
@@ -759,20 +808,89 @@ foreach ($n in $aoclNames) {
 }
 Write-Host ("AOCL-lib enum/type identifiers for coexistence: {0}" -f $aoclMap.Count)
 
-# Bug #3: version inline-wrapper namespaces so the wrapper API is prefixed too. ONLY namespaces
+# Leading-underscore AOCL struct tags (e.g. _aoclsparse_matrix, _da_handle) may
+# leak into the COFF symbol map, where the plain-C / coexistence passes render
+# them with a preserved leading '_' or an upper-case prefix -- diverging from the
+# DLL's embedded C++ mangled type component, which Prefix-MsvcTypes renders as a
+# plain lower-case prepend (typeTok + tag, e.g. aocl_ + _aoclsparse_matrix ->
+# aocl__aoclsparse_matrix). That divergence leaves renamed C++ TEMPLATE consumers
+# (aoclsparse::mv/trsv<T>, da_handle_init<T>) with an unresolved struct tag at
+# link time. Pin these header tags to the binary's canonical form so template
+# symbols resolve. Consulted BEFORE $map in the evaluator.
+$aoclTagCanon = New-Object 'System.Collections.Generic.Dictionary[string,string]'
+foreach ($n in $aoclNames) {
+    if (-not $n.StartsWith('_')) { continue }
+    if (-not (Test-KeepTypeEnum $n)) { continue }
+    $canon = $lowerPrefix + $n
+    if ($n -ceq $canon) { continue }
+    if (-not $aoclTagCanon.ContainsKey($n)) { $aoclTagCanon[$n] = $canon }
+}
+Write-Host ("AOCL leading-underscore struct tags pinned to binary form: {0}" -f $aoclTagCanon.Count)
+
+# version inline-wrapper namespaces so the wrapper API is prefixed too. ONLY namespaces
 # with NO exported mangled symbols are safe (else header/binary scope mismatch, e.g. Au::/alcp::).
 $wrapperNamespaces = @('libflame')
 foreach ($ns in $wrapperNamespaces) {
     if (-not $map.ContainsKey($ns)) { $map[$ns] = ($lowerPrefix + $ns) }
 }
 
-# Bug #4: match comments and string/char literals as PROTECTED regions and rewrite only
+# match comments and string/char literals as PROTECTED regions and rewrite only
 # identifiers outside them (previously names inside // /* */ "..." '...' were renamed too).
-# Bug #5: #include directives are PROTECTED too -- an include path token is not a
+# #include directives are PROTECTED too -- an include path token is not a
 # symbol. Without this, a library-namespace token in the map (e.g. `alcp`) rewrote
 # `#include <alcp/macros.h>` into `#include <coexbalcp/macros.h>`, a path that does
 # not exist, breaking the renamed headers. The whole directive line is consumed as
 # one protected region so neither <...> nor "..." path components are renamed.
+#
+# token-paste FRAGMENTS in X-macro lists must NOT be renamed. A short,
+# generic exported symbol (e.g. `fma`, `cpuid`) can also appear as a lone macro
+# argument in an X-macro list, e.g.
+#   #define AU_CPUID_FLAG_LIST(X)   ... X(fma) X(fma4) ...
+#   #define AU_CPUID_FLAG_ENUM(name) AU_FLAG_##name,
+# Renaming the `fma` fragment turns the enumerator into AU_FLAG_<prefix>fma while
+# its literal usages stay AU_FLAG_fma -> "undeclared identifier". Guard such
+# lone-macro-argument fragments, but only inside #define bodies (where X-macro
+# lists live) and only in headers that use the `##` operator -- so ordinary code
+# like sizeof(mask) or foo(sym) is renamed normally.
+$script:PasteArgNonMacro = [System.Collections.Generic.HashSet[string]]::new(
+    [string[]]@('sizeof','alignof','_Alignof','__alignof__','__alignof',
+                'typeof','__typeof__','__typeof','decltype','offsetof',
+                'static_assert','_Static_assert','return'),
+    [System.StringComparer]::Ordinal)
+
+function Test-InPreprocessorDefine([string]$text, [int]$pos) {
+    # Start of the physical line containing pos.
+    $start = $text.LastIndexOf("`n", [Math]::Max(0, $pos - 1)) + 1
+    if ($pos -le 0) { $start = 0 }
+    # Extend upward across backslash-continued previous physical lines.
+    while ($start -gt 0) {
+        $prevStart = $text.LastIndexOf("`n", $start - 2) + 1
+        $prevLine = $text.Substring($prevStart, ($start - 1) - $prevStart)
+        if ($prevLine.TrimEnd("`r").EndsWith('\')) { $start = $prevStart } else { break }
+    }
+    $seg = $text.Substring($start, [Math]::Min(48, $text.Length - $start))
+    return ($seg -match '^[ \t]*#[ \t]*define\b')
+}
+
+function Test-PasteFragmentArg([string]$text, [int]$start, [int]$len) {
+    $n = $text.Length
+    # Right side: next non-space char must close the argument list.
+    $j = $start + $len
+    while ($j -lt $n -and ($text[$j] -eq ' ' -or $text[$j] -eq "`t")) { $j++ }
+    if ($j -ge $n -or $text[$j] -ne ')') { return $false }
+    # Left side: previous non-space char must be '(' preceded by the applier
+    # macro name, i.e. the surrounding pattern is IDENT( <token> ).
+    $i = $start - 1
+    while ($i -ge 0 -and ($text[$i] -eq ' ' -or $text[$i] -eq "`t")) { $i-- }
+    if ($i -lt 0 -or $text[$i] -ne '(') { return $false }
+    $i--
+    while ($i -ge 0 -and ($text[$i] -eq ' ' -or $text[$i] -eq "`t")) { $i-- }
+    $endName = $i + 1
+    while ($i -ge 0 -and ([char]::IsLetterOrDigit($text[$i]) -or $text[$i] -eq '_')) { $i-- }
+    $applier = $text.Substring($i + 1, $endName - ($i + 1))
+    if ([string]::IsNullOrEmpty($applier) -or $script:PasteArgNonMacro.Contains($applier)) { return $false }
+    return (Test-InPreprocessorDefine $text $start)
+}
 $rxScan = [regex]::new(
     '(//[^\r\n]*)' +                 # 1: line comment
     '|(/\*.*?\*/)' +                 # 2: block comment (Singleline: '.' spans newlines)
@@ -785,7 +903,17 @@ $aoclActive = $false
 $evaluator = {
     param($m)
     if ($m.Groups[6].Success) {
+        # Skip token-paste fragments like the `fma` in `X(fma)`,
+        # but only in headers that actually use `##`.
+        if ($hasPaste -and (Test-PasteFragmentArg $scanText $m.Index $m.Length)) {
+            return $m.Value
+        }
         $v = $null
+        # Leading-underscore AOCL struct tags: pin to the binary's canonical
+        # lower-case-prepend form so the header matches the DLL's mangled type
+        # components (templates link). Overrides any leading-'_'/upper-case form
+        # the plain-C map would otherwise supply.
+        if ($aoclActive -and $m.Value.StartsWith('_') -and $aoclTagCanon.TryGetValue($m.Value, [ref]$v)) { return $v }
         if ($map.TryGetValue($m.Value, [ref]$v)) { return $v }
         if ($aoclActive -and $aoclMap.TryGetValue($m.Value, [ref]$v)) { return $v }
     }
@@ -797,6 +925,8 @@ Write-Host ("Processing headers    : {0}" -f $headers.Count)
 foreach ($hdr in $headers) {
     $content = [System.IO.File]::ReadAllText($hdr.FullName)
     $aoclActive = (Test-IsAoclLibHeader $hdr.FullName)
+    $scanText = $content
+    $hasPaste = $content.Contains('##')
     $new = $rxScan.Replace($content, $evaluator)
     if ($new -ne $content) {
         [System.IO.File]::WriteAllText($hdr.FullName, $new)

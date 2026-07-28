@@ -26,14 +26,20 @@
 #ifdef USE_RENAMED_SYMBOLS
 // e.g. SYMBOL_PREFIX_TOKEN_LOWER = av1_  ->  PFX(aoclsparse_mv) = av1_aoclsparse_mv
 #define PFX(name) CONCAT(SYMBOL_PREFIX_TOKEN_LOWER, name)
+// C++ NAMESPACES are renamed with the user's CASE-PRESERVED prefix (the mangled
+// rename keeps case), e.g. namespace aoclsparse -> AOCL_aoclsparse, whereas C
+// types/enums use the lowercase family prefix (aocl_...). Alias the namespace
+// with the raw-case token. For non-uppercase prefixes raw == lowercase.
+#define NSPFX(name) CONCAT(SYMBOL_PREFIX_TOKEN_RAW, name)
 #else
 #define PFX(name) name
+#define NSPFX(name) name
 #endif
 
 #ifdef ENABLE_SPARSE
 #include "aoclsparse.hpp"
-// Alias the (possibly renamed) C++ namespace: aoclsparse or av1_aoclsparse.
-namespace sp = PFX(aoclsparse);
+// Alias the (possibly renamed) C++ namespace: aoclsparse or AOCL_aoclsparse.
+namespace sp = NSPFX(aoclsparse);
 #endif
 
 // The templated C++ DA interface lives in aoclda.hpp, which only ships with

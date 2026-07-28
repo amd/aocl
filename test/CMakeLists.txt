@@ -217,6 +217,31 @@ if(ENABLE_MULTITHREADING)
     endif()
 endif()
 
+# Runtime dirs of the absolute-path external libs the AOCL library was linked
+# against (e.g. OpenSSL). A SHARED test loads libaocl.{so,dll}, whose NEEDED deps
+# resolve via LD_LIBRARY_PATH / PATH, not the test's own rpath -- so bake their
+# dirs into the per-test env. On Windows the DLLs sit in a sibling bin dir next
+# to the .lib import libs. No-op for static builds.
+set(_AOCL_EXTERNAL_LIB_RPATHS "")
+foreach(_ext_lib IN LISTS _AOCL_PLATFORM_SYSLIBS)
+    if(IS_ABSOLUTE "${_ext_lib}" AND EXISTS "${_ext_lib}")
+        get_filename_component(_ext_dir "${_ext_lib}" DIRECTORY)
+        if(_ext_dir)
+            list(APPEND _AOCL_EXTERNAL_LIB_RPATHS "${_ext_dir}")
+            if(WIN32)
+                get_filename_component(_ext_parent "${_ext_dir}" DIRECTORY)
+                if(EXISTS "${_ext_parent}/bin")
+                    list(APPEND _AOCL_EXTERNAL_LIB_RPATHS "${_ext_parent}/bin")
+                endif()
+            endif()
+        endif()
+    endif()
+endforeach()
+if(_AOCL_EXTERNAL_LIB_RPATHS)
+    list(REMOVE_DUPLICATES _AOCL_EXTERNAL_LIB_RPATHS)
+    message(STATUS "Test: external-lib runtime dirs = ${_AOCL_EXTERNAL_LIB_RPATHS}")
+endif()
+
 # Helper: return the env var that the test binary needs so it can find the
 # AOCL shared library at runtime (PATH on Windows, LD_LIBRARY_PATH on Linux).
 function(_aocl_test_env_var _outvar _libdir)
@@ -230,6 +255,10 @@ function(_aocl_test_env_var _outvar _libdir)
         if(_AOCL_GCC_RUNTIME_RPATH)
             set(_libpath "${_libdir}:${_AOCL_GCC_RUNTIME_RPATH}")
         endif()
+        # Transitive external-lib dirs (OpenSSL libcrypto.so, ...) for shared builds.
+        foreach(_ext_dir IN LISTS _AOCL_EXTERNAL_LIB_RPATHS)
+            set(_libpath "${_libpath}:${_ext_dir}")
+        endforeach()
         set(${_outvar} "LD_LIBRARY_PATH=${_libpath}:$ENV{LD_LIBRARY_PATH}" PARENT_SCOPE)
     endif()
 endfunction()
@@ -285,12 +314,31 @@ function(_aocl_add_test_executable _name _src _renamed _is_cpp)
     )
 
     if(_renamed)
-        target_compile_definitions(${_name} PRIVATE
+        set(_renamed_defs
             USE_RENAMED_SYMBOLS
             SYMBOL_PREFIX_TOKEN_LOWER=${SYMBOL_PREFIX_LOWER}
             SYMBOL_PREFIX_TOKEN_UPPER=${SYMBOL_PREFIX_UPPER}
             SYMBOL_PREFIX_STR="${SYMBOL_PREFIX_LOWER}"
         )
+        # C++ NAMESPACES are renamed with the user's CASE-PRESERVED prefix (the
+        # mangled-symbol rename keeps case: normalize_mangled_prefix_token), e.g.
+        # namespace aoclsparse -> AOCL_aoclsparse (NOT aocl_aoclsparse). C types/
+        # enums instead use the lowercase family prefix. Pass the raw-case token
+        # so the C++ template test can alias the namespace correctly. For
+        # non-uppercase prefixes (myprefix, myprefix__) raw == lowercase.
+        list(APPEND _renamed_defs SYMBOL_PREFIX_TOKEN_RAW=${SYMBOL_RENAME_PREFIX})
+        # The header rewrite (apply_aocl_lib_type_enum_renames) leaves AOCL
+        # type/enum names that ALREADY start with the lowercase rename prefix
+        # UNCHANGED ("not n.startswith(prefix)"). The only such name this test
+        # redefines is aocl_compression_desc, which stays bare when the prefix
+        # is "aocl_" (i.e. renaming AOCL with its own prefix). Signal the test
+        # so it does not double-prefix that type. (Compression *functions* are
+        # linker symbols and ARE double-prefixed, so they are unaffected.)
+        string(FIND "aocl_compression_desc" "${SYMBOL_PREFIX_LOWER}" _acd_pos)
+        if(_acd_pos EQUAL 0)
+            list(APPEND _renamed_defs AOCL_COMPRESSION_DESC_KEPT_BARE)
+        endif()
+        target_compile_definitions(${_name} PRIVATE ${_renamed_defs})
     else()
         target_compile_definitions(${_name} PRIVATE SYMBOL_PREFIX_STR="")
     endif()
@@ -356,16 +404,16 @@ endfunction()
 function(_aocl_register_test _name _libdir)
     add_test(NAME ${_name} COMMAND ${_name} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     if(WIN32)
-        # Prepend the AOCL lib dir to the *inherited* PATH (which already
-        # carries the oneAPI runtime dirs needed by aocl.dll's dependencies:
-        # libiomp5md.dll, svml_dispmd.dll, libifcoremd.dll, ...). Using
-        # ENVIRONMENT_MODIFICATION's path_list_prepend augments the existing
-        # PATH instead of overwriting it. Plain ENVIRONMENT="PATH=a;b;c" would
-        # be mis-parsed: CTest treats ';' as a list separator, collapsing the
-        # value to its first directory and causing 0xC0000135
-        # (STATUS_DLL_NOT_FOUND) at test runtime.
-        set_tests_properties(${_name} PROPERTIES
-            ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_libdir}")
+        # Prepend the AOCL lib dir (+ external DLL dirs like OpenSSL/bin) to the
+        # *inherited* PATH (which already carries the oneAPI runtime dirs needed
+        # by aocl.dll). ENVIRONMENT_MODIFICATION path_list_prepend augments PATH
+        # instead of overwriting it; plain ENVIRONMENT="PATH=a;b;c" would be
+        # mis-parsed (';' is a list separator) -> 0xC0000135 (DLL_NOT_FOUND).
+        set(_env_mods "PATH=path_list_prepend:${_libdir}")
+        foreach(_dll_dir IN LISTS _AOCL_EXTERNAL_LIB_RPATHS)
+            list(APPEND _env_mods "PATH=path_list_prepend:${_dll_dir}")
+        endforeach()
+        set_tests_properties(${_name} PROPERTIES ENVIRONMENT_MODIFICATION "${_env_mods}")
     else()
         _aocl_test_env_var(_envstr "${_libdir}")
         set_tests_properties(${_name} PROPERTIES ENVIRONMENT "${_envstr}")

@@ -188,7 +188,7 @@ set(_MSVC_ABI_EXCLUDE_REGEXES
 # rename_engine_windows.ps1 (-Mode map). BLIS emits these as weak/COMDAT defined symbols
 # from BLIS_INLINE functions (e.g. bli_round->round(), sup paths->printf()); if
 # they enter the rename map they get prefixed in both the binary and the header
-# text rewrite, producing undeclared aocl_round/aocl_printf in renamed headers.
+# text rewrite, producing undeclared myprefix_round/myprefix_printf in renamed headers.
 # ---------------------------------------------------------------------------
 set(_STDLIB_EXCLUDE_SYMS
     # <math.h>
@@ -375,14 +375,17 @@ macro(_rename_itanium_symbol SYM PREFIX_TOKEN)
         # Empty token – nothing to do
     else()
         # Find the nested-name 'N' index
-        # Supported forms: _ZN, _ZZN, _ZTVN, _ZTIN, _ZTSN, _ZTTN, _ZTCN, _ZGVN, _ZGRN
+        # Supported forms: _ZN, _ZZN, _ZTVN, _ZTIN, _ZTSN, _ZTTN, _ZTCN, _ZGVN,
+        # _ZGRN, plus _ZTHN / _ZTWN (TLS init / wrapper of a namespace-scoped
+        # thread_local, else the namespace leaks unprefixed while the variable
+        # itself is renamed).
         set(_n_idx -1)
         if("${SYM}" MATCHES "^_ZN")
             set(_n_idx 2)
         elseif("${SYM}" MATCHES "^_ZZN")
             set(_n_idx 3)
         else()
-            foreach(_pfx _ZTVN _ZTIN _ZTSN _ZTTN _ZTCN _ZGVN _ZGRN)
+            foreach(_pfx _ZTVN _ZTIN _ZTSN _ZTTN _ZTCN _ZGVN _ZGRN _ZTHN _ZTWN)
                 if("${SYM}" MATCHES "^${_pfx}")
                     string(LENGTH "${_pfx}" _pfx_len)
                     math(EXPR _n_idx "${_pfx_len} - 1")
@@ -545,6 +548,9 @@ macro(_rename_msvc_symbol SYM PREFIX_TOKEN)
     set(_RENAMED_SYM "${SYM}")
 
     string(REGEX REPLACE "[^A-Za-z0-9_]" "" _tok "${PREFIX_TOKEN}")
+    # Lowercase branding token for embedded C TYPE tags (parity with pwsh $typeTok):
+    # namespace keeps case-preserved _tok, type tags use the lowercase form.
+    string(TOLOWER "${_tok}" _type_tok)
     if("${_tok}" STREQUAL "")
         # Nothing to do
     elseif(NOT "${SYM}" MATCHES "^\\?")
@@ -640,29 +646,42 @@ macro(_rename_msvc_symbol SYM PREFIX_TOKEN)
 
                     # Build result with prefix injected at _inject_at, but
                     # only if the segment isn't already prefixed (idempotent).
+                    # A FUNCTION-NAME injection (_inject_at == _op_len) uses the
+                    # case-aware intelligent prefix; a NAMESPACE keeps _tok.
+                    if(_inject_at EQUAL _op_len)
+                        if(_firstAt0 GREATER_EQUAL 0)
+                            set(_name_end ${_firstAt0})
+                        else()
+                            set(_name_end ${_term})
+                        endif()
+                        math(EXPR _name_len "${_name_end} - ${_op_len}")
+                        string(SUBSTRING "${SYM}" ${_op_len} ${_name_len} _fname)
+                        _get_intelligent_prefix("${_fname}" "${PREFIX_TOKEN}")
+                        set(_use_tok "${_RESULT_PREFIX}")
+                    else()
+                        set(_use_tok "${_tok}")
+                    endif()
                     string(SUBSTRING "${SYM}" 0 ${_inject_at} _head)
                     string(SUBSTRING "${SYM}" ${_inject_at} -1 _tail)
-                    string(LENGTH "${_tok}" _tok_len)
+                    string(LENGTH "${_use_tok}" _tok_len)
                     string(LENGTH "${_tail}" _tail_len)
                     set(_already_prefixed FALSE)
                     if(_tail_len GREATER_EQUAL _tok_len)
                         string(SUBSTRING "${_tail}" 0 ${_tok_len} _tail_pfx)
-                        if("${_tail_pfx}" STREQUAL "${_tok}")
+                        if("${_tail_pfx}" STREQUAL "${_use_tok}")
                             set(_already_prefixed TRUE)
                         endif()
                     endif()
                     if(NOT _already_prefixed)
-                        set(_RENAMED_SYM "${_head}${_tok}${_tail}")
+                        set(_RENAMED_SYM "${_head}${_use_tok}${_tail}")
                     endif()
                 endif()
             endif()
 
-            # Option A: prefix embedded AOCL type-name components so C++
-            # template/overload symbols match the renamed headers. Applied on
-            # every MSVC path (mirrors pwsh Rename-Msvc, which always returns
-            # via Prefix-MsvcTypes), including when no name/namespace rename
-            # occurred above.
-            _prefix_msvc_types(_RENAMED_SYM "${_tok}")
+            # Prefix embedded AOCL type-name components so C++ template/overload
+            # symbols match the renamed headers. Applied on every MSVC path
+            # (mirrors pwsh Prefix-MsvcTypes).
+            _prefix_msvc_types(_RENAMED_SYM "${_type_tok}")
         endif()
     endif()
 endmacro()

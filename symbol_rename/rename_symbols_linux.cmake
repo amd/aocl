@@ -183,18 +183,28 @@ function(create_shared_library_linux RENAMED_STATIC ORIGINAL_SO OUT_SO)
         file(APPEND "${_verscript}" "        ${_sym};\n")
     endforeach()
     # Also export EVERY renamed symbol via a prefix-token glob. The explicit
-    # list above is built with the cmake renamer (_compute_new_symbol), which
-    # diverges from the actual Python-engine rename for complex C++ template
-    # instantiations (std::complex<T> args + embedded type tags such as
-    # _aoclsparse_matrix -> av1__aoclsparse_matrix). Those mangled names then
-    # match no `global:` entry and are localized by `local: *`, hiding e.g.
-    # aoclsparse::trsv<T> / mv<T> from the .so. The glob catches all renamed
-    # global/weak symbols (mangled C++ names contain the prefix token), so they
-    # stay exported. Safe for coexistence: every such symbol is prefix-namespaced
-    # and cannot clash with MKL/system symbols.
+    # list above uses the cmake renamer (_compute_new_symbol), which diverges
+    # from the Python engine for complex C++ templates; those mangled names
+    # would else fall through to `local: *` and hide e.g. aoclsparse::trsv<T>.
     string(REGEX REPLACE "[^A-Za-z0-9_]" "" _pfx_tok "${PREFIX}")
     if(NOT _pfx_tok STREQUAL "")
-        file(APPEND "${_verscript}" "        *${_pfx_tok}*;\n")
+        # Renamed symbols carry the prefix in intelligent CASE forms (namespaces
+        # case-preserved AOCL_aoclsparse; C names lowercased aocl_da_handle_init).
+        # A single case-sensitive glob misses some form, so emit one per distinct
+        # case form so every renamed symbol stays exported.
+        string(TOLOWER "${_pfx_tok}" _pfx_tok_lower)
+        string(TOUPPER "${_pfx_tok}" _pfx_tok_upper)
+        set(_pfx_globs "${_pfx_tok}")
+        if(NOT _pfx_tok_lower STREQUAL "${_pfx_tok}")
+            list(APPEND _pfx_globs "${_pfx_tok_lower}")
+        endif()
+        if(NOT _pfx_tok_upper STREQUAL "${_pfx_tok}" AND
+           NOT _pfx_tok_upper STREQUAL "${_pfx_tok_lower}")
+            list(APPEND _pfx_globs "${_pfx_tok_upper}")
+        endif()
+        foreach(_g IN LISTS _pfx_globs)
+            file(APPEND "${_verscript}" "        *${_g}*;\n")
+        endforeach()
     endif()
     file(APPEND "${_verscript}" "    local:\n        *;\n};\n")
     message(STATUS "  Version script exports: ${_n_renamed}")
