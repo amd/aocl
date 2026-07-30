@@ -60,6 +60,12 @@ if(ENABLE_AOCL_LIBMEM)
 
     set(_libmem_tgt aocl-libmem_static)
 
+    # LibMem's dynamic-dispatch (src/system/*) uses dlopen()/dlsym(), so consumers
+    # of libaocl must link libdl. Register it as LibMem's own external dep.
+    if(NOT WIN32 AND CMAKE_DL_LIBS)
+        aocl_tb_add_external_libs(${CMAKE_DL_LIBS})
+    endif()
+
     aocl_tb_add_whole_lib(${_libmem_tgt})
 
     aocl_tb_install_component(aocl-libmem

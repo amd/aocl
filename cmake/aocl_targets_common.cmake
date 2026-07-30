@@ -172,6 +172,16 @@ if(WIN32)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
+# Opt-in -Werror (/WX on MSVC) across the BIY build; OFF keeps warnings non-fatal.
+option(AOCL_BIY_WARNINGS_AS_ERRORS "Treat compiler warnings as errors in the AOCL BIY build" OFF)
+if(AOCL_BIY_WARNINGS_AS_ERRORS)
+    if(MSVC)
+        add_compile_options(/WX)
+    else()
+        add_compile_options(-Werror)
+    endif()
+endif()
+
 # ---------------------------------------------------------------------------
 # Third-party (external) runtime dependency collection.
 #
@@ -301,6 +311,11 @@ function(aocl_tb_add_objects)
             get_target_property(_ty ${_o} TYPE)
             if(_ty STREQUAL "OBJECT_LIBRARY")
                 set_property(TARGET ${_o} PROPERTY POSITION_INDEPENDENT_CODE ON)
+                # Real objects, not LTO bitcode: keep libaocl.a GNU-ld-linkable.
+                if(NOT MSVC)
+                    set_property(TARGET ${_o} PROPERTY INTERPROCEDURAL_OPTIMIZATION OFF)
+                    set_property(TARGET ${_o} APPEND PROPERTY COMPILE_OPTIONS -fno-lto)
+                endif()
                 set_property(GLOBAL APPEND PROPERTY AOCL_TB_OBJECT_LIBS "$<TARGET_OBJECTS:${_o}>")
             elseif(_ty STREQUAL "INTERFACE_LIBRARY")
                 # An INTERFACE aggregator (e.g. AOCL-LibMem's uarch_objlib) holds no
@@ -318,9 +333,11 @@ function(aocl_tb_add_objects)
                         set(_inner "${CMAKE_MATCH_1}")
                         if(TARGET ${_inner})
                             set_property(TARGET ${_inner} PROPERTY POSITION_INDEPENDENT_CODE ON)
-                            # LibMem's IFUNC resolvers need real object code, not LTO
-                            # bitcode, when pulled directly into the unified link.
+                            # Real objects, not LTO bitcode (IFUNC + linkable .a).
                             set_property(TARGET ${_inner} PROPERTY INTERPROCEDURAL_OPTIMIZATION OFF)
+                            if(NOT MSVC)
+                                set_property(TARGET ${_inner} APPEND PROPERTY COMPILE_OPTIONS -fno-lto)
+                            endif()
                         endif()
                         set_property(GLOBAL APPEND PROPERTY AOCL_TB_OBJECT_LIBS "${_s}")
                     endif()
@@ -398,22 +415,47 @@ endfunction()
 # nothing else.
 set(AOCL_INSTALL_COMPONENT "aocl")
 
-# --- clean default install ---------------------------------------------------
-# Each component keeps its own native install() rules, which would dump
-# the component libraries/headers (au_cpuid_static.lib, aoclsparse.lib, ...) into
-# the top-level install prefix. The unified deliverable is the single libaocl, so
-# override install() with a no-op that swallows those component-native rules. The
-# BIY's own deliverable/staging rules call the real command directly as _install()
-# (the original install(), auto-aliased by overriding it here). Net effect: a plain
+# --- clean default install (header-honouring shim) ---------------------------
+# Each component keeps its own native install() rules, which would dump the
+# component LIBRARIES (au_cpuid_static.lib, aoclsparse.lib, ...) into the top-level
+# prefix. The unified deliverable is the single libaocl, so install() is overridden
+# with a shim that:
+#   * HONOURS a component's own header installs -- install(FILES ...) and
+#     install(DIRECTORY ...) whose DESTINATION lands in an include/ dir are
+#     re-emitted verbatim, so the unified include/ contains EXACTLY the public
+#     headers each component ships (e.g. libflame's lapack.h + generated
+#     lapacke_mangling.h, aocl-sparse's kernel-templates/), matching every
+#     component's individual install-header rules.
+#   * SWALLOWS everything else -- install(TARGETS) component libs, EXPORT,
+#     PROGRAMS, pkgconfig (.pc), docs, examples, CODE/SCRIPT -- so component
+#     libraries never pollute the top-level prefix.
+# The real command is available as _install() (auto-aliased by overriding it here);
+# the BIY's own deliverable/staging rules call _install() directly. Headers a
+# component installs via install(TARGETS ... PUBLIC_HEADER) (not FILES/DIRECTORY)
+# are staged separately by aocl_tb_install_component()'s HEADER_DIRS. Net effect of
 #
 #     cmake --build <build> --target install      (== cmake --install <build>)
 #
-# installs ONLY the unified aocl deliverable (aocl.dll/.so + import/static lib +
-# manifest + merged headers) -- no --component aocl needed. No component declares
-# an export(EXPORT ...) set, so swallowing install(EXPORT)/install(TARGETS EXPORT)
-# does not affect configuration.
+# is the unified aocl deliverable + a merged include/ faithful to each component.
 if(AOCL_TB_UNIFIED_BUILD)
     macro(install)
+        set(_aocl_inst_mode "${ARGV0}")
+        if("${_aocl_inst_mode}" STREQUAL "FILES" OR "${_aocl_inst_mode}" STREQUAL "DIRECTORY")
+            # Honour only header installs: DESTINATION under include/, or the
+            # GNUInstallDirs shorthand TYPE INCLUDE (e.g. AOCL-Crypto's alcp/).
+            cmake_parse_arguments(_AOCL_INST "" "DESTINATION;TYPE" "" ${ARGV})
+            if(_AOCL_INST_DESTINATION MATCHES "(^|/)include($|/)"
+               OR "${_AOCL_INST_TYPE}" STREQUAL "INCLUDE")
+                # Re-emit verbatim (order preserved -- DIRECTORY installs require
+                # DESTINATION before FILES_MATCHING/PATTERN/REGEX). A component's
+                # absolute ${CMAKE_INSTALL_PREFIX}/include resolves to the unified
+                # deliverable prefix (set at configure), so headers land in the
+                # merged include/; a relative include dest honours --prefix.
+                _install(${ARGV})
+            endif()
+        endif()
+        # Any other install() form (TARGETS/EXPORT/PROGRAMS/CODE/SCRIPT, or a
+        # non-include FILES/DIRECTORY such as .pc/docs/examples) is swallowed.
     endmacro()
 endif()
 
@@ -484,11 +526,15 @@ endfunction()
 # build/<comp_dir>/install_package and merge its public headers into the final
 # install tree.
 #
-#   aocl_tb_install_component(<comp_dir> TARGETS <t>... HEADER_DIRS <dir>...)
+#   aocl_tb_install_component(<comp_dir> TARGETS <t>... HEADER_DIRS <dir>...
+#                             [HEADER_FILES <file>...])
 #
 # HEADER_DIRS entries copy "<dir>/" contents, filtered to header files only.
+# HEADER_FILES are explicit public headers (for components whose public set is
+# NOT a whole-directory copy -- e.g. libflame ships the monolithic FLAME.h /
+# lapacke.h that sit beside intermediate blis1.h / FLA_f2c.h we must not copy).
 function(aocl_tb_install_component COMP_DIR)
-    cmake_parse_arguments(TBI "" "" "TARGETS;HEADER_DIRS" ${ARGN})
+    cmake_parse_arguments(TBI "" "" "TARGETS;HEADER_DIRS;HEADER_FILES" ${ARGN})
     set(_pkg "${CMAKE_BINARY_DIR}/${COMP_DIR}/install_package")
 
     # (a) per-component install_package/lib  -- the component's own STATIC
@@ -507,12 +553,44 @@ function(aocl_tb_install_component COMP_DIR)
                     COMPONENT ${AOCL_INSTALL_COMPONENT}
                     RUNTIME DESTINATION "${_pkg}/lib"
                     LIBRARY DESTINATION "${_pkg}/lib"
-                    ARCHIVE DESTINATION "${_pkg}/lib"
-                    PUBLIC_HEADER DESTINATION "${_pkg}/include")
+                    ARCHIVE DESTINATION "${_pkg}/lib")
         endif()
         # These component libraries are EXCLUDE_FROM_ALL; record them so the
         # unified target can depend on them and force their build before install.
         set_property(GLOBAL APPEND PROPERTY AOCL_TB_DEP_TARGETS ${TBI_TARGETS})
+
+        # Ship each target's OWN declared PUBLIC_HEADER set -- defer to the
+        # component's install(TARGETS ... PUBLIC_HEADER) rule (via the target's
+        # PUBLIC_HEADER property) instead of a hardcoded file list, so a header a
+        # component adds later is picked up automatically. Relative entries
+        # (libflame uses build-tree-relative paths like include/FLAME.h) are
+        # resolved against the owning target's SOURCE_DIR. Done here (not in the
+        # install() shim) so it works regardless of the calling scope.
+        foreach(_t IN LISTS TBI_TARGETS)
+            if(TARGET ${_t})
+                get_target_property(_ph ${_t} PUBLIC_HEADER)
+                if(_ph)
+                    get_target_property(_tsrc ${_t} SOURCE_DIR)
+                    set(_ph_files "")
+                    foreach(_h IN LISTS _ph)
+                        if(IS_ABSOLUTE "${_h}")
+                            set(_hp "${_h}")
+                        else()
+                            set(_hp "${_tsrc}/${_h}")
+                        endif()
+                        if(EXISTS "${_hp}")
+                            list(APPEND _ph_files "${_hp}")
+                        endif()
+                    endforeach()
+                    if(_ph_files)
+                        _install(FILES ${_ph_files} DESTINATION "${_pkg}/include"
+                                COMPONENT ${AOCL_INSTALL_COMPONENT})
+                        _install(FILES ${_ph_files} DESTINATION "include"
+                                COMPONENT ${AOCL_INSTALL_COMPONENT})
+                    endif()
+                endif()
+            endif()
+        endforeach()
     endif()
 
     # (b) per-component install_package/include  +  (c) merged final include
@@ -528,6 +606,22 @@ function(aocl_tb_install_component COMP_DIR)
                     FILES_MATCHING REGEX ".*\\.(h|hh|hpp|H)$")
         endif()
     endforeach()
+
+    # (d) explicit public header FILES -- curated set for components whose public
+    #     headers are NOT a whole-directory copy (e.g. libflame's monolithic
+    #     FLAME.h/lapacke.h beside intermediate blis1.h/FLA_f2c.h we must skip).
+    set(_tbi_hf "")
+    foreach(_f IN LISTS TBI_HEADER_FILES)
+        if(EXISTS "${_f}")
+            list(APPEND _tbi_hf "${_f}")
+        endif()
+    endforeach()
+    if(_tbi_hf)
+        _install(FILES ${_tbi_hf} DESTINATION "${_pkg}/include"
+                COMPONENT ${AOCL_INSTALL_COMPONENT})
+        _install(FILES ${_tbi_hf} DESTINATION "include"
+                COMPONENT ${AOCL_INSTALL_COMPONENT})
+    endif()
 endfunction()
 
 # ---------------------------------------------------------------------------

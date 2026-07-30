@@ -25,9 +25,8 @@
 #      free of duplicate Utils symbols at the final merge. FetchContent then
 #      add_subdirectory()s the tree; dirs cached as AOCL_TB_LAPACK_SRC/_BIN.
 #   6. The target name is normalized: on Windows an ALIAS `flame` is added so
-#      Sparse/DA can reference the canonical name. PUBLIC_HEADER is cleared so a
-#      second header install does not break on libflame's build-tree-relative
-#      header paths.
+#      Sparse/DA can reference the canonical name. libflame's PUBLIC_HEADER set is
+#      left intact and read by aocl_tb_install_component to stage the public headers.
 #   7. The generated BLIS headers (flat-header / flat-cblas-header) are forced to
 #      build first. Because libflame splits its sources across many internal
 #      OBJECT libraries, add_dependencies on the aggregate is not enough under
@@ -120,13 +119,6 @@ if(ENABLE_AOCL_LAPACK)
         set(_lapack_tgt flame)
     endif()
 
-    # libflame sets PUBLIC_HEADER to build-tree-relative paths (include/FLAME.h),
-    # which break a second install(TARGETS ... PUBLIC_HEADER). Clear it; the
-    # public headers are installed via HEADER_DIRS below instead.
-    if(TARGET ${_lapack_tgt})
-        set_target_properties(${_lapack_tgt} PROPERTIES PUBLIC_HEADER "")
-    endif()
-
     # libflame includes the (generated, flattened) BLIS headers; force their
     # generation first. The aggregate dependency below is not enough on its own:
     # libflame splits its sources across many internal OBJECT libraries (e.g.
@@ -155,10 +147,10 @@ if(ENABLE_AOCL_LAPACK)
 
     aocl_tb_add_whole_lib(${_lapack_tgt})
 
-    aocl_tb_install_component(libflame
-        TARGETS     ${_lapack_tgt}
-        HEADER_DIRS "${AOCL_TB_LAPACK_BIN}/include"
-                    "${AOCL_TB_LAPACK_SRC}/include")
+    # Public headers are taken from libflame's own PUBLIC_HEADER set (no hardcoded
+    # list); LAPACKE's lapack.h + generated lapacke_mangling.h are added by the
+    # install() shim honouring LAPACKE's own install(FILES ...).
+    aocl_tb_install_component(libflame TARGETS ${_lapack_tgt})
 
     # Per-component shared library (shared builds only): libflame.so, recording a
     # normal runtime dependency on libblis[-mt].so and libaoclutils.so.
