@@ -16,10 +16,12 @@
 #      (ALM_STATIC_DISPATCH is only passed when non-empty -- an empty value fails
 #      LibM's validation and omitting it selects dynamic dispatch). FetchContent
 #      then add_subdirectory()s the tree; dirs cached as AOCL_TB_LIBM_SRC/_BIN.
-#   4. LibM produces TWO static archives: `libm_static` (OUTPUT_NAME `alm`) built
-#      from internal OBJECT libraries, plus a self-contained `alm_utils_static`
-#      CPU-id helper. libalm links alm_utils but does NOT embed its objects, so
-#      the objects of BOTH are registered for libaocl via aocl_tb_add_objects().
+#   4. LibM produces `libm_static` (OUTPUT_NAME `alm`) built from internal OBJECT
+#      libraries; its objects are registered for libaocl via aocl_tb_add_objects().
+#      LibM <= 5.2.x also produced a self-contained `alm_utils_static` CPU-id
+#      helper (linked by libalm but not embedded), whose objects were registered
+#      too; LibM 5.3 dropped it (CPU-id moved to the aocl-utils component), so all
+#      alm_utils_static handling below is guarded by `if(TARGET alm_utils_static)`.
 #   5. An `alm` ALIAS (and `libalm` on Windows) is exposed so OpenRNG's link of
 #      the bare name resolves to the in-tree static target, and a synthetic AOCL
 #      root (AOCL_TB_LIBM_ROOT, carrying amdlibm.h) is staged for OpenRNG's
@@ -94,15 +96,22 @@ if(ENABLE_AOCL_LIBM)
         endif()
     endforeach()
 
-    # alm_utils_static is built straight from sources (cpuid.c) and libm_static
-    # links but does not embed it, so recompile its sources into an OBJECT twin
-    # and register those objects for the unified library too.
-    aocl_tb_objectify(alm_utils_static)
+    # alm_utils_static: older LibM (<= 5.2.x) built a self-contained CPU-id helper
+    # archive (cpuid.c) that libalm links but does not embed, so its objects had
+    # to be recompiled into an OBJECT twin and registered for the unified library.
+    # AOCL-LibM 5.3 dropped this target -- CPU identification now comes from the
+    # aocl-utils component (get_au_flag / Cct_Libaoclutils, provided in the
+    # unified build by ENABLE_AOCL_UTILS) -- so only register it when present.
+    if(TARGET alm_utils_static)
+        aocl_tb_objectify(alm_utils_static)
+    endif()
 
     # Both static archives are merged (libalm.a links but does not embed
     # alm_utils). Kept as the informational whole-archive record.
     aocl_tb_add_whole_lib(libm_static)
-    aocl_tb_add_whole_lib(alm_utils_static)
+    if(TARGET alm_utils_static)
+        aocl_tb_add_whole_lib(alm_utils_static)
+    endif()
 
     # OpenRNG links the bare 'alm' name; expose an ALIAS to the static target.
     # On Windows the patched OpenRNG links 'libalm' instead, so alias both.
@@ -122,13 +131,20 @@ if(ENABLE_AOCL_LIBM)
     configure_file("${AOCL_TB_LIBM_SRC}/include/external/amdlibm_vec.h"
                    "${AOCL_TB_LIBM_ROOT}/include/amdlibm_vec.h" COPYONLY)
 
+    # LibM static targets to install/emit: libm_static always, plus the
+    # standalone alm_utils_static only on LibM versions that still define it.
+    set(_libm_static_targets libm_static)
+    if(TARGET alm_utils_static)
+        list(APPEND _libm_static_targets alm_utils_static)
+    endif()
+
     aocl_tb_install_component(aocl-libm
-        TARGETS     libm_static alm_utils_static
+        TARGETS     ${_libm_static_targets}
         HEADER_DIRS "${AOCL_TB_LIBM_SRC}/include/external")
 
     aocl_tb_emit_shared(libm aocl-libm
         OUTPUT_NAME alm
-        STATICS     libm_static alm_utils_static)
+        STATICS     ${_libm_static_targets})
 
     aocl_tb_register_manifest(libm aocl-libm)
 endif()
