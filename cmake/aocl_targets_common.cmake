@@ -506,13 +506,13 @@ if(AOCL_TB_UNIFIED_BUILD)
         # non-include FILES/DIRECTORY such as .pc/docs/examples) is swallowed.
     endmacro()
 
-    # Per-component configure logging: while AOCL_TB_COMPONENT_LOG is set (during a
-    # component's configure), redirect its message() output to that file; only
-    # warnings/errors also reach the console. Unset => normal pass-through.
-    macro(message)
+    # Per-component configure logging: while AOCL_TB_COMPONENT_LOG is set, redirect
+    # a component's message() output there; only warnings/errors reach the console.
+    # A function, not a macro: a macro re-parses ${ARGV}, so a backslash in a
+    # message (e.g. a "C:\Program Files\..." path) aborts configure as a bad escape.
+    function(message)
         if(AOCL_TB_COMPONENT_LOG)
-            # ARGV is a macro text-substitution, not a real var; copy to a list.
-            set(_aocl_msg_argv ${ARGV})
+            set(_aocl_msg_argv "${ARGV}")
             set(_aocl_msg_txt "${_aocl_msg_argv}")
             set(_aocl_msg_mode "")
             if(_aocl_msg_argv)
@@ -529,7 +529,7 @@ if(AOCL_TB_UNIFIED_BUILD)
         else()
             _message(${ARGV})
         endif()
-    endmacro()
+    endfunction()
 endif()
 
 # Intel Fortran runtime lib dir (Windows). libflame's f2c objects request the

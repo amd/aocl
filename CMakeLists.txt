@@ -9,18 +9,18 @@ if(NOT DEFINED AOCL_SINGLE_LIBRARY_NAME)
 endif()
 project(${AOCL_SINGLE_LIBRARY_NAME} LANGUAGES C CXX)
 
-# Set the build configurations
-if(NOT DEFINED CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_CONFIGURATION_TYPES "Debug" CACHE STRING "Build configurations" FORCE)
-elseif(CMAKE_CONFIGURATION_TYPES MATCHES "Debug;")
-    set(CMAKE_CONFIGURATION_TYPES "Debug" CACHE STRING "Build configurations" FORCE)
+# Set the build type first (default Release) so the configuration types below
+# can mirror it.
+if(NOT DEFINED CMAKE_BUILD_TYPE OR NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 endif()
 
-# Set the build type
-if(NOT DEFINED CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
-elseif(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
+# Multi-config generators (e.g. Visual Studio) select the configuration from
+# CMAKE_CONFIGURATION_TYPES, not CMAKE_BUILD_TYPE, and CMake pre-seeds it with
+# the full "Debug;Release;MinSizeRel;RelWithDebInfo" list (first entry Debug
+# would become the default); mirror CMAKE_BUILD_TYPE instead.
+if(NOT DEFINED CMAKE_CONFIGURATION_TYPES OR CMAKE_CONFIGURATION_TYPES MATCHES "Debug;")
+    set(CMAKE_CONFIGURATION_TYPES "${CMAKE_BUILD_TYPE}" CACHE STRING "Build configurations" FORCE)
 endif()
 
 # Set the installation prefix
