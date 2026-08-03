@@ -28,10 +28,8 @@
 #      <bindir>/include/<config-family>, plus the C++ wrappers (blis.hh /
 #      cblas.hh) shipped in the source tree under vendor/cpp.
 #   6. blis registers its compiled objects for the unified library from inside
-#      its patched CMakeLists (aocl_tb_add_objects). aocl_tb_add_whole_lib(
-#      blis_static) additionally records the static archive; that record feeds
-#      the per-component shared lib (step 8) and install (step 7) -- the unified
-#      libaocl itself is built from objects, not from this archive.
+#      its patched CMakeLists (aocl_tb_add_objects). The unified libaocl is
+#      built from those objects, not from a merged static archive.
 #   7. aocl_tb_install_component() stages blis_static and the public headers into
 #      the per-component install_package layout. Because blis.h / cblas.h are
 #      GENERATED at build time by the flat-header / flat-cblas-header custom
@@ -99,9 +97,6 @@ if(ENABLE_AOCL_BLAS)
     set(AOCL_TB_BLAS_INCLUDE_DIR
         "${AOCL_TB_BLAS_BIN}/include/${BLIS_CONFIG_FAMILY};${AOCL_TB_BLAS_SRC}/vendor/cpp"
         CACHE INTERNAL "AOCL-BLAS include dirs (in-tree build)")
-
-    # Merge the static archive into libaocl.
-    aocl_tb_add_whole_lib(blis_static)
 
     aocl_tb_install_component(blis
         TARGETS     blis_static

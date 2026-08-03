@@ -19,8 +19,8 @@
 #      OFF) to emit the static PIC archive; tests/docs/examples/utility are off.
 #      FetchContent then add_subdirectory()s the tree; the resolved dirs are
 #      cached as AOCL_TB_COMPRESSION_SRC / AOCL_TB_COMPRESSION_BIN.
-#   5. aocl_tb_add_whole_lib() registers the archive for whole-archive merge into
-#      libaocl.
+#   5. The unified libaocl is assembled from the component's compiled object
+#      files (not from a merged static archive).
 #   6. aocl_tb_install_component() stages the lib + the public api/ headers.
 #   7. aocl_tb_emit_shared() (shared builds only) emits libaocl_compression.so.
 #   8. aocl_tb_register_manifest() records the threading choice in the manifest.
@@ -67,8 +67,6 @@ if(ENABLE_AOCL_COMPRESSION)
     endblock()
 
     set(_comp_tgt aocl_compression)
-
-    aocl_tb_add_whole_lib(${_comp_tgt})
 
     aocl_tb_install_component(aocl-compression
         TARGETS     ${_comp_tgt}

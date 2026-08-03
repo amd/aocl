@@ -106,13 +106,6 @@ if(ENABLE_AOCL_LIBM)
         aocl_tb_objectify(alm_utils_static)
     endif()
 
-    # Both static archives are merged (libalm.a links but does not embed
-    # alm_utils). Kept as the informational whole-archive record.
-    aocl_tb_add_whole_lib(libm_static)
-    if(TARGET alm_utils_static)
-        aocl_tb_add_whole_lib(alm_utils_static)
-    endif()
-
     # OpenRNG links the bare 'alm' name; expose an ALIAS to the static target.
     # On Windows the patched OpenRNG links 'libalm' instead, so alias both.
     if(NOT TARGET alm)

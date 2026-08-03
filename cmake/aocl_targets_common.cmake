@@ -49,6 +49,11 @@ endif()
 #       <subdir>   component folder name under a source root (e.g. aocl-utils)
 # ---------------------------------------------------------------------------
 macro(aocl_tb_declare_source _fc_name _pfx _subdir)
+    # Per-component configure log (block-scoped, auto-clears at endblock); the
+    # message() override redirects this component's output here.
+    string(TOLOWER "${_pfx}" _aocl_comp_key)
+    set(AOCL_TB_COMPONENT_LOG "${CMAKE_BINARY_DIR}/aocl_${_aocl_comp_key}_configuration.log")
+    file(WRITE "${AOCL_TB_COMPONENT_LOG}" "# AOCL BIY per-component configure log: ${_fc_name}\n")
     if(${_pfx}_PATH)
         # Normalise to forward slashes: this path is embedded verbatim into the
         # generated FetchContent sub-build CMake code, where a Windows backslash
@@ -71,6 +76,7 @@ macro(aocl_tb_declare_source _fc_name _pfx _subdir)
     endif()
     unset(_aocl_src)
     unset(_aocl_path)
+    unset(_aocl_comp_key)
 endmacro()
 
 # ---------------------------------------------------------------------------
@@ -157,6 +163,14 @@ endif()
 # per-component install_package.
 set(BUILD_STATIC_LIBS ON)
 
+# Announce the composition model so the per-component "BUILD_SHARED_LIBS=OFF"
+# below is not read as a mismatch with a shared BIY build.
+message(STATUS "===================================================================")
+message(STATUS "[aocl] BIY build model: components compile to STATIC/PIC objects;")
+message(STATUS "[aocl]   the unified libaocl is the '${AOCL_LINKAGE_EFFECTIVE}' deliverable.")
+message(STATUS "[aocl]   Per-component configure output -> aocl_<component>_configuration.log")
+message(STATUS "===================================================================")
+
 # Component static archives must be position-independent so they can be linked
 # into the shared libaocl.so.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -179,6 +193,40 @@ if(AOCL_BIY_WARNINGS_AS_ERRORS)
         add_compile_options(/WX)
     else()
         add_compile_options(-Werror)
+    endif()
+endif()
+
+# Fortran-compiler detection (AOCL-DA solvers only). No usable compiler =>
+# BUILD_FORTRAN OFF (dropped, not fatal); AOCL_ENABLE_FORTRAN=OFF forces off.
+# Order: explicit CMAKE_Fortran_COMPILER > Windows ifx/ifort > LLVM/Clang skip
+# (flang ABI churn; an explicit compiler is still honoured) > GCC gfortran.
+option(AOCL_ENABLE_FORTRAN "Build Fortran component parts; auto-off if no Fortran compiler" ON)
+set(AOCL_TB_FORTRAN_OK OFF)
+if(AOCL_ENABLE_FORTRAN AND (ENABLE_AOCL_LAPACK OR ENABLE_AOCL_DA))
+    set(_aocl_fc_skipped OFF)
+    if(CMAKE_Fortran_COMPILER)
+        find_program(AOCL_TB_FORTRAN_COMPILER NAMES "${CMAKE_Fortran_COMPILER}")
+    elseif(WIN32)
+        find_program(AOCL_TB_FORTRAN_COMPILER NAMES ifx ifort
+            HINTS "$ENV{ONEAPI_ROOT}/compiler/latest/bin"
+                  "C:/Program Files (x86)/Intel/oneAPI/compiler/latest/bin")
+        if(AOCL_TB_FORTRAN_COMPILER)
+            set(CMAKE_Fortran_COMPILER "${AOCL_TB_FORTRAN_COMPILER}" CACHE FILEPATH "AOCL Fortran compiler")
+        endif()
+    elseif(CMAKE_C_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        set(_aocl_fc_skipped ON)
+        message(STATUS "[aocl] LLVM/Clang toolchain: Fortran auto-detection skipped; "
+            "AOCL-DA Fortran solvers disabled. Set CMAKE_Fortran_COMPILER (e.g. AOCC "
+            "flang) to enable, or -DAOCL_ENABLE_FORTRAN=OFF to silence.")
+    else()
+        find_program(AOCL_TB_FORTRAN_COMPILER NAMES gfortran)
+    endif()
+    if(AOCL_TB_FORTRAN_COMPILER)
+        set(AOCL_TB_FORTRAN_OK ON)
+    elseif(NOT _aocl_fc_skipped)
+        message(WARNING "[aocl] No usable Fortran compiler found (Windows: ifx/ifort; "
+            "GCC: gfortran); AOCL-DA Fortran solvers disabled. "
+            "Pass -DAOCL_ENABLE_FORTRAN=OFF to silence this warning.")
     endif()
 endif()
 
@@ -457,6 +505,31 @@ if(AOCL_TB_UNIFIED_BUILD)
         # Any other install() form (TARGETS/EXPORT/PROGRAMS/CODE/SCRIPT, or a
         # non-include FILES/DIRECTORY such as .pc/docs/examples) is swallowed.
     endmacro()
+
+    # Per-component configure logging: while AOCL_TB_COMPONENT_LOG is set (during a
+    # component's configure), redirect its message() output to that file; only
+    # warnings/errors also reach the console. Unset => normal pass-through.
+    macro(message)
+        if(AOCL_TB_COMPONENT_LOG)
+            # ARGV is a macro text-substitution, not a real var; copy to a list.
+            set(_aocl_msg_argv ${ARGV})
+            set(_aocl_msg_txt "${_aocl_msg_argv}")
+            set(_aocl_msg_mode "")
+            if(_aocl_msg_argv)
+                list(GET _aocl_msg_argv 0 _aocl_msg_mode)
+                if(_aocl_msg_mode MATCHES "^(FATAL_ERROR|SEND_ERROR|WARNING|AUTHOR_WARNING|DEPRECATION|NOTICE|STATUS|VERBOSE|DEBUG|TRACE|CHECK_START|CHECK_PASS|CHECK_FAIL|CONFIGURE_LOG)$")
+                    list(REMOVE_AT _aocl_msg_argv 0)
+                endif()
+                list(JOIN _aocl_msg_argv " " _aocl_msg_txt)
+            endif()
+            file(APPEND "${AOCL_TB_COMPONENT_LOG}" "${_aocl_msg_txt}\n")
+            if(_aocl_msg_mode MATCHES "^(FATAL_ERROR|SEND_ERROR|WARNING|AUTHOR_WARNING|DEPRECATION)$")
+                _message(${ARGV})
+            endif()
+        else()
+            _message(${ARGV})
+        endif()
+    endmacro()
 endif()
 
 # Intel Fortran runtime lib dir (Windows). libflame's f2c objects request the
@@ -482,19 +555,6 @@ if(WIN32 AND ENABLE_AOCL_LAPACK)
         endif()
     endif()
 endif()
-
-# Record a component's STATIC library target in the GLOBAL AOCL_TB_WHOLE_LIBS
-# property. NOTE: the unified libaocl is assembled from object files
-# ($<TARGET_OBJECTS>, see aocl_tb_add_objects / the composition model above), so
-# this list is currently informational only -- no consumer reads it. It is kept
-# as a stable hook for components that prefer to advertise their static archive,
-# and to validate (FATAL) that the named target actually exists.
-function(aocl_tb_add_whole_lib TGT)
-    if(NOT TARGET ${TGT})
-        message(FATAL_ERROR "[aocl] whole-archive target '${TGT}' does not exist")
-    endif()
-    set_property(GLOBAL APPEND PROPERTY AOCL_TB_WHOLE_LIBS ${TGT})
-endfunction()
 
 # Record a component in the unified manifest. Writes a per-component fragment
 # (manifest.d/<key>.cfg) that aocl_gen_manifest.cmake consumes at build time to

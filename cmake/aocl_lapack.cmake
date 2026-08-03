@@ -36,7 +36,7 @@
 #   8. AOCL_TB_LAPACK_INCLUDE_DIR exports include dirs for consumers. On Unix
 #      libgfortran is added to the link libs (f2c-translated objects); on Windows
 #      the Intel Fortran runtime is resolved by aocl_unified.cmake.
-#   9. aocl_tb_add_whole_lib() merges the archive into libaocl.
+#   9. The unified libaocl is assembled from libflame's compiled objects.
 #  10. aocl_tb_install_component() stages the lib + headers; aocl_tb_emit_shared()
 #      (shared builds only) emits libflame.so with runtime deps on libblis[-mt].so
 #      and libaoclutils.so; aocl_tb_register_manifest() records int-size + MT.
@@ -144,8 +144,6 @@ if(ENABLE_AOCL_LAPACK)
     # aocl_unified.cmake -- right after enable_language(Fortran) makes CMake's
     # auto-detected implicit runtime available in the root scope -- so nothing is
     # named here (see aocl_tb_add_fortran_runtime()).
-
-    aocl_tb_add_whole_lib(${_lapack_tgt})
 
     # Public headers are taken from libflame's own PUBLIC_HEADER set (no hardcoded
     # list); LAPACKE's lapack.h + generated lapacke_mangling.h are added by the

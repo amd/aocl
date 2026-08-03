@@ -19,7 +19,7 @@
 #   4. LibMem's hand-written IFUNC resolvers must NOT become LTO bitcode (GNU ld
 #      cannot whole-archive bitcode members and IFUNC relocations need real
 #      object code), so -fno-lto is forced on the static target for Clang.
-#   5. aocl_tb_add_whole_lib() registers the archive for merge into libaocl.
+#   5. The unified libaocl is assembled from the component's compiled objects.
 #   6. aocl_tb_install_component() stages the lib + include/ headers.
 #   7. aocl_tb_emit_shared() (shared builds only) emits libaocl-libmem.so.
 #   8. aocl_tb_register_manifest() records the component in the manifest.
@@ -65,8 +65,6 @@ if(ENABLE_AOCL_LIBMEM)
     if(NOT WIN32 AND CMAKE_DL_LIBS)
         aocl_tb_add_external_libs(${CMAKE_DL_LIBS})
     endif()
-
-    aocl_tb_add_whole_lib(${_libmem_tgt})
 
     aocl_tb_install_component(aocl-libmem
         TARGETS     ${_libmem_tgt}

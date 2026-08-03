@@ -28,7 +28,7 @@
 #   6. The generated, flattened BLIS headers are forced to build first
 #      (add_dependencies on flat-header / flat-cblas-header) to avoid a
 #      parallel-build race on blis.h / cblas.h.
-#   7. aocl_tb_add_whole_lib() registers the archive for merge into libaocl.
+#   7. The unified libaocl is assembled from the component's compiled objects.
 #   8. aocl_tb_install_component() stages the lib + public headers.
 #   9. aocl_tb_emit_shared() (shared builds only) emits libaoclsparse.so with a
 #      runtime dependency on libblis[-mt].so, libflame.so and libaoclutils.so.
@@ -90,8 +90,6 @@ if(ENABLE_AOCL_SPARSE)
     if(TARGET flat-cblas-header)
         add_dependencies(${_sparse_tgt} flat-cblas-header)
     endif()
-
-    aocl_tb_add_whole_lib(${_sparse_tgt})
 
     aocl_tb_install_component(aocl-sparse
         TARGETS     ${_sparse_tgt}

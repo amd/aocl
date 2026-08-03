@@ -38,6 +38,12 @@
 if(ENABLE_AOCL_CRYPTO)
     message(STATUS "[aocl] Configuring AOCL-Crypto (ALCP, FetchContent + add_subdirectory)")
 
+    # Honour a bare `export OPENSSL_INSTALL_DIR` (no preset), matching AOCL-DA's
+    # BOOST_ROOT; an explicit -DOPENSSL_INSTALL_DIR still wins.
+    if(NOT OPENSSL_INSTALL_DIR AND DEFINED ENV{OPENSSL_INSTALL_DIR})
+        set(OPENSSL_INSTALL_DIR "$ENV{OPENSSL_INSTALL_DIR}")
+    endif()
+
     # --- OpenSSL (hard dependency of the crypto core) ---------------------
     if(NOT OPENSSL_INSTALL_DIR OR NOT EXISTS "${OPENSSL_INSTALL_DIR}/include/openssl/bn.h")
         message(FATAL_ERROR
@@ -115,8 +121,6 @@ if(ENABLE_AOCL_CRYPTO)
     endblock()
 
     set(_alcp_tgt alcp_static)
-
-    aocl_tb_add_whole_lib(${_alcp_tgt})
 
     aocl_tb_install_component(aocl-crypto
         TARGETS     ${_alcp_tgt}

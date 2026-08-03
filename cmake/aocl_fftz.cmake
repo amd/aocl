@@ -19,7 +19,7 @@
 #      cached as AOCL_TB_FFTZ_SRC / AOCL_TB_FFTZ_BIN.
 #   5. The static target is named platform-dependently (`aocl_fftz_static` on
 #      Windows, `aocl_fftz` on Linux).
-#   6. aocl_tb_add_whole_lib() registers the archive for merge into libaocl.
+#   6. The unified libaocl is assembled from the component's compiled objects.
 #   7. aocl_tb_install_component() stages the lib + include/ headers.
 #   8. aocl_tb_emit_shared() (shared builds only) emits libaocl_fftz.so.
 #   9. aocl_tb_register_manifest() records the threading choice in the manifest.
@@ -65,8 +65,6 @@ if(ENABLE_AOCL_FFTZ)
     else()
         set(_fftz_tgt aocl_fftz)
     endif()
-
-    aocl_tb_add_whole_lib(${_fftz_tgt})
 
     aocl_tb_install_component(aocl-fftz
         TARGETS     ${_fftz_tgt}

@@ -96,7 +96,7 @@ endfunction()
 # language rules (CMAKE_Fortran_COMPILE_OBJECT, ...) to be available in THIS
 # (root) directory scope -- the components only enable Fortran inside their own
 # child scopes, so enable it here too before the unified targets are created.
-if(ENABLE_AOCL_LAPACK OR ENABLE_AOCL_DA)
+if((ENABLE_AOCL_LAPACK OR ENABLE_AOCL_DA) AND AOCL_TB_FORTRAN_OK)
     enable_language(Fortran)
     # Fortran is now enabled in this (root) scope, so CMake has recorded the
     # compiler's implicit runtime (CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES). Register

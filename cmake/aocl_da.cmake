@@ -31,10 +31,10 @@
 #   8. The generated BLIS headers are forced to build first via
 #      aocl_tb_force_target_deps_recursive (same internal-OBJECT-library race fix
 #      as LAPACK).
-#   9. aocl_tb_add_whole_lib() merges the (self-contained, Fortran externals
-#      lbfgsb + RALFit embedded as OBJECT files) archive into libaocl;
-#      aocl_tb_install_component / emit_shared / register_manifest stage the lib +
-#      headers, emit the shared lib (shared builds), and record the manifest.
+#   9. The unified libaocl is assembled from DA's compiled object files (the
+#      self-contained Fortran externals lbfgsb + RALFit are embedded as OBJECT
+#      files); aocl_tb_install_component / register_manifest stage the lib +
+#      headers and record the manifest.
 
 if(ENABLE_AOCL_DA)
     message(STATUS "[aocl] Configuring AOCL-DA (FetchContent + add_subdirectory)")
@@ -81,44 +81,31 @@ if(ENABLE_AOCL_DA)
         set(_da_smp "no")
     endif()
 
-    # DA enables Fortran in its sub-build. The top-level project is C/CXX only,
-    # so we must point it at a Fortran compiler. On Windows there is no gfortran;
-    # use Intel ifx (oneAPI) when available. The Fortran objects are forced onto
-    # the static multithreaded runtime (/MT) so they agree with the rest of the
-    # stack at the final unified link.
+    # AOCL-DA's lbfgsb/RALFit solvers are the only Fortran in the unified build;
+    # the compiler is resolved centrally (AOCL_TB_FORTRAN_OK/_COMPILER). When none
+    # is available, BUILD_FORTRAN is turned OFF below (solvers dropped) instead of
+    # failing the build. On Windows the DA objects also need the Intel static-MT
+    # Fortran runtime import libs and /MT.
     set(_da_fc "")
     set(_da_fc_flags "")
-    set(_da_external_libs gfortran quadmath)
-    if(WIN32)
-        find_program(AOCL_DA_FC NAMES ifx ifort
-            HINTS "$ENV{ONEAPI_ROOT}/compiler/latest/bin"
-                  "C:/Program Files (x86)/Intel/oneAPI/compiler/latest/bin")
-        if(AOCL_DA_FC)
-            set(_da_fc "${AOCL_DA_FC}")
+    set(_da_external_libs "")
+    if(AOCL_TB_FORTRAN_OK)
+        if(WIN32)
+            set(_da_fc "${AOCL_TB_FORTRAN_COMPILER}")
             set(_da_fc_flags "/MT")
-        else()
-            message(WARNING "[aocl] AOCL-DA needs a Fortran compiler on Windows "
-                "(ifx/ifort) but none was found; the DA build will fail.")
-        endif()
-
-        # The unified aocl.dll (and per-component aocl-da.dll) whole-archive DA's
-        # static lib, pulling in Intel Fortran runtime symbols; supply the Intel
-        # static multithreaded (_mt) Fortran runtime import libraries (the GNU
-        # gfortran/quadmath used on Linux do not exist here).
-        set(_da_fc_libs "")
-        if(AOCL_DA_FC)
-            get_filename_component(_da_fc_bin "${AOCL_DA_FC}" DIRECTORY)
+            get_filename_component(_da_fc_bin "${AOCL_TB_FORTRAN_COMPILER}" DIRECTORY)
             get_filename_component(_da_fc_root "${_da_fc_bin}" DIRECTORY)
             set(_da_fc_libdir "${_da_fc_root}/lib")
             foreach(_fl IN ITEMS
                     libifcoremt libifport libirc libircmt
                     svml_dispmt libdecimal libmmt libmatmul)
                 if(EXISTS "${_da_fc_libdir}/${_fl}.lib")
-                    list(APPEND _da_fc_libs "${_da_fc_libdir}/${_fl}.lib")
+                    list(APPEND _da_external_libs "${_da_fc_libdir}/${_fl}.lib")
                 endif()
             endforeach()
+        else()
+            set(_da_external_libs gfortran quadmath)
         endif()
-        set(_da_external_libs ${_da_fc_libs})
     endif()
 
     block()
@@ -157,7 +144,7 @@ if(ENABLE_AOCL_DA)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${_da_cxx_flags}")
         set(BUILD_ILP64     ${ENABLE_ILP64}    CACHE BOOL   "" FORCE)
         set(BUILD_SMP       "${_da_smp}"       CACHE STRING "" FORCE)
-        set(BUILD_FORTRAN   ON                 CACHE BOOL   "" FORCE)
+        set(BUILD_FORTRAN   ${AOCL_TB_FORTRAN_OK} CACHE BOOL "" FORCE)
         set(ARCH            "${DA_ISA_CONFIG}" CACHE STRING "" FORCE)
         set(BUILD_EXAMPLES  OFF                CACHE BOOL   "" FORCE)
         set(BUILD_GTEST     OFF                CACHE BOOL   "" FORCE)
@@ -186,8 +173,6 @@ if(ENABLE_AOCL_DA)
     # Force every compiled target in DA's subtree to wait for the headers.
     aocl_tb_force_target_deps_recursive("${AOCL_TB_DA_SRC}"
         flat-header flat-cblas-header)
-
-    aocl_tb_add_whole_lib(${_da_tgt})
 
     aocl_tb_install_component(aocl-data-analytics
         TARGETS     ${_da_tgt}
