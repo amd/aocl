@@ -19,8 +19,8 @@ void test_gemv(void);
 // Function to test BLAS AXPBY (all precisions: S, D, C, Z)
 void test_axpby(void);
 
-// Function to test symbol renaming
-void test_symbol_renaming(void);
+// Function to test AOCL OpenRNG
+void test_openrng(void);
 
 #ifdef __cplusplus
 }

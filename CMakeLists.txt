@@ -9,18 +9,18 @@ if(NOT DEFINED AOCL_SINGLE_LIBRARY_NAME)
 endif()
 project(${AOCL_SINGLE_LIBRARY_NAME} LANGUAGES C CXX)
 
-# Set the build configurations
-if(NOT DEFINED CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_CONFIGURATION_TYPES "Debug" CACHE STRING "Build configurations" FORCE)
-elseif(CMAKE_CONFIGURATION_TYPES MATCHES "Debug;")
-    set(CMAKE_CONFIGURATION_TYPES "Debug" CACHE STRING "Build configurations" FORCE)
+# Set the build type first (default Release) so the configuration types below
+# can mirror it.
+if(NOT DEFINED CMAKE_BUILD_TYPE OR NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 endif()
 
-# Set the build type
-if(NOT DEFINED CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
-elseif(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
+# Multi-config generators (e.g. Visual Studio) select the configuration from
+# CMAKE_CONFIGURATION_TYPES, not CMAKE_BUILD_TYPE, and CMake pre-seeds it with
+# the full "Debug;Release;MinSizeRel;RelWithDebInfo" list (first entry Debug
+# would become the default); mirror CMAKE_BUILD_TYPE instead.
+if(NOT DEFINED CMAKE_CONFIGURATION_TYPES OR CMAKE_CONFIGURATION_TYPES MATCHES "Debug;")
+    set(CMAKE_CONFIGURATION_TYPES "${CMAKE_BUILD_TYPE}" CACHE STRING "Build configurations" FORCE)
 endif()
 
 # Set the installation prefix
@@ -80,6 +80,13 @@ option(ENABLE_AOCL_LIBM "Check if we need to include AOCL-LibM into AOCL unified
 option(ENABLE_AOCL_COMPRESSION "Check if we need to include AOCL-Compression into AOCL single library" OFF)
 option(ENABLE_AOCL_DA "Check if we need to include AOCL-DA into AOCL unified library" OFF)
 option(ENABLE_AOCL_LIBMEM "Check if we need to include AOCL-LibMem into AOCL unified library" OFF)
+option(ENABLE_AOCL_OPENRNG "Check if we need to include OpenRNG into AOCL unified library" OFF)
+option(ENABLE_AOCL_FFTZ "Check if we need to include AOCL-FFTZ into AOCL unified library" OFF)
+option(ENABLE_AOCL_DLP "Check if we need to include AOCL-DLP into AOCL unified library" OFF)
+# AOCL-ScaLAPACK is NOT merged into the unified libaocl: when enabled it is built
+# as its own library that LINKS the finished libaocl (which must contain its
+# prerequisites blis + aocl-utils + libflame). Requires MPI and a Fortran compiler.
+option(ENABLE_AOCL_SCALAPACK "Build AOCL-ScaLAPACK as a separate library linked against the unified libaocl (not merged into it)" OFF)
 option(ENABLE_MULTITHREADING "Check if we need to enable multithreading" OFF)
 option(ENABLE_CBLAS "Check if we need to enable AOCL-BLAS CBLAS interface" ON)
 option(ENABLE_AMD_FLAGS "Check if we need to enable amd flags for AOCL-LAPACK library build" OFF)
@@ -89,6 +96,24 @@ option(ENABLE_ILP64 "Check if we need to enable ILP64" OFF)
 option(ENABLE_BLAS_EXT_GEMMT "Check if we need to enable blas external gemmt for AOCL-LAPACK library build" ON)
 option(ENABLE_AOCL_LAPACK_BLAS_COUPLING "Check if we need to tightly coupled with AOCL-BLAS library for AOCL-LAPACK library build" OFF)
 option(ENABLE_TESTS "Enable building and running library functionality tests" OFF)
+
+# Centralized AOCL build-options layer: global single-select knobs (linkage,
+# threading runtime, integer size, architecture) + per-component overrides,
+# with validation and a backward-compatible bridge to the legacy variables.
+# Included here -- after the legacy option() block, before BUILD_STATIC_LIBS /
+# ENABLE_ILP64 / AMD_CONFIG are consumed -- so explicit AOCL_* options can drive
+# the legacy variables while "auto" defaults leave existing presets untouched.
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/aocl_options.cmake)
+
+# AOCL-LibMem is a UNIX / x86-only component (IFUNC-based runtime CPU dispatch);
+# it does not build on Windows. Skip it there with a warning so a Windows
+# configure that requests it does not fail later with a duplicate-output build
+# error instead of a clear message.
+if(WIN32 AND ENABLE_AOCL_LIBMEM)
+    message(WARNING "AOCL-LibMem is not supported on Windows (UNIX/x86 only); "
+                    "disabling ENABLE_AOCL_LIBMEM for this build.")
+    set(ENABLE_AOCL_LIBMEM OFF CACHE BOOL "AOCL-LibMem (UNIX/x86 only)" FORCE)
+endif()
 
 # Set build static libs option based on shared libs option
 if(BUILD_SHARED_LIBS)
@@ -245,334 +270,38 @@ endif()
 # Normalize binary directory path
 string(REPLACE "\\" "/" CMAKE_BINARY_DIR "${CMAKE_BINARY_DIR}")
 
-# Initialize lists for object files, def files, and dependent libs
-set(OBJECT_FILES "")
-set(DEF_FILES "")
-set(DEPENDENT_LIBS "")
+# ---------------------------------------------------------------------------
+# Unified AOCL library build (target-based: FetchContent + add_subdirectory).
+#
+# Each component lives in its own modular file under cmake/ (mirroring the old
+# per-library split: aocl_utils.cmake, aocl_compression.cmake, aocl_blas.cmake,
+# ...). They are pulled in
+# with include() so they share this (root) directory scope and its variables;
+# the order matters because later components consume earlier ones' targets and
+# exported include dirs. aocl_targets_common.cmake sets up the shared helpers
+# and resolves inter-component dependencies; aocl_unified.cmake merges the
+# component static archives into libaocl.{so,a}.
+# ---------------------------------------------------------------------------
+set(AOCL_TB_CMAKE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(${AOCL_TB_CMAKE_DIR}/aocl_targets_common.cmake)
+include(${AOCL_TB_CMAKE_DIR}/aocl_utils.cmake)
+include(${AOCL_TB_CMAKE_DIR}/aocl_compression.cmake)
+include(${AOCL_TB_CMAKE_DIR}/aocl_blas.cmake)
+include(${AOCL_TB_CMAKE_DIR}/aocl_lapack.cmake)
+include(${AOCL_TB_CMAKE_DIR}/aocl_sparse.cmake)
+include(${AOCL_TB_CMAKE_DIR}/aocl_dlp.cmake)
+include(${AOCL_TB_CMAKE_DIR}/aocl_da.cmake)
+include(${AOCL_TB_CMAKE_DIR}/aocl_libmem.cmake)
+include(${AOCL_TB_CMAKE_DIR}/aocl_libm.cmake)
+include(${AOCL_TB_CMAKE_DIR}/aocl_openrng.cmake)
+include(${AOCL_TB_CMAKE_DIR}/aocl_fftz.cmake)
+include(${AOCL_TB_CMAKE_DIR}/aocl_crypto.cmake)
+include(${AOCL_TB_CMAKE_DIR}/aocl_unified.cmake)
 
-# Include build scripts based on enabled options
-if(ENABLE_AOCL_UTILS)
-    include(aocl_utils_build.cmake)
-endif()
-
-if(ENABLE_AOCL_COMPRESSION)
-    include(aocl_compression_build.cmake)
-endif()
-
-if(ENABLE_AOCL_BLAS)
-    include(aocl_blis_build.cmake)
-endif()
-
-if(UNIX AND ENABLE_AOCL_LIBMEM)
-    include(aocl_libmem_build.cmake)
-elseif(ENABLE_AOCL_LIBMEM)
-    message(WARNING "AOCL-LibMem is only supported on UNIX platforms.")
-endif()
-
-if(ENABLE_AOCL_LAPACK)
-    if(NOT ENABLE_AOCL_BLAS OR NOT ENABLE_AOCL_UTILS)
-        message(WARNING "AOCL-LAPACK has dependency on AOCL-BLAS and AOCL-Utils. Hence ENABLE_AOCL_BLAS and ENABLE_AOCL_UTILS should be \"check\" or \"ON\"")
-        if(NOT ENABLE_AOCL_UTILS)
-            set(ENABLE_AOCL_UTILS ON)
-            include(aocl_utils_build.cmake)
-        endif()
-
-        if(NOT ENABLE_AOCL_BLAS)
-            set(ENABLE_AOCL_BLAS ON)
-            include(aocl_blis_build.cmake)
-        endif()
-    endif()
-
-    include(aocl_libflame_build.cmake)
-endif()
-
-if(ENABLE_AOCL_SPARSE)
-    if(NOT ENABLE_AOCL_BLAS OR NOT ENABLE_AOCL_UTILS OR NOT ENABLE_AOCL_LAPACK)
-        message(WARNING "AOCL-SPARSE has dependency on AOCL-BLAS, AOCL-LAPACK and AOCL-Utils. Hence ENABLE_AOCL_BLAS, ENABLE_AOCL_LAPACK and ENABLE_AOCL_UTILS should be \"check\" or \"ON\"")
-        if(NOT ENABLE_AOCL_UTILS)
-            set(ENABLE_AOCL_UTILS ON)
-            include(aocl_utils_build.cmake)
-        endif()
-
-        if(NOT ENABLE_AOCL_BLAS)
-            set(ENABLE_AOCL_BLAS ON)
-            include(aocl_blis_build.cmake)
-        endif()
-
-        if(NOT ENABLE_AOCL_LAPACK)
-            set(ENABLE_AOCL_LAPACK ON)
-            include(aocl_libflame_build.cmake)
-        endif()
-    endif()
-
-    include(aocl_sparse_build.cmake)
-endif()
-
-if(ENABLE_AOCL_DA)
-    enable_language(Fortran)
-    if(NOT ENABLE_AOCL_BLAS OR NOT ENABLE_AOCL_UTILS OR NOT ENABLE_AOCL_LAPACK OR NOT ENABLE_AOCL_SPARSE)
-        message(WARNING "AOCL-DA has dependency on AOCL-BLAS, AOCL-LAPACK and AOCL-Utils. Hence ENABLE_AOCL_BLAS, ENABLE_AOCL_LAPACK, ENABLE_AOCL_SPARSE and ENABLE_AOCL_UTILS should be \"check\" or \"ON\"")
-        if(NOT ENABLE_AOCL_UTILS)
-            set(ENABLE_AOCL_UTILS ON)
-            include(aocl_utils_build.cmake)
-        endif()
-
-        if(NOT ENABLE_AOCL_BLAS)
-            set(ENABLE_AOCL_BLAS ON)
-            include(aocl_blis_build.cmake)
-        endif()
-
-        if(NOT ENABLE_AOCL_LAPACK)
-            set(ENABLE_AOCL_LAPACK ON)
-            include(aocl_libflame_build.cmake)
-        endif()
-
-        if(NOT ENABLE_AOCL_SPARSE)
-            set(ENABLE_AOCL_SPARSE ON)
-            include(aocl_sparse_build.cmake)
-        endif()
-    endif()
-
-    include(aocl_da_build.cmake)
-endif()
-
-if(ENABLE_AOCL_LIBM)
-    if(NOT ENABLE_AOCL_UTILS)
-        set(ENABLE_AOCL_UTILS ON)
-        include(aocl_utils_build.cmake)
-    endif()
-    include(aocl_libm_build.cmake)
-endif()
-
-if(ENABLE_AOCL_CRYPTO)
-    # Check if OPENSSL_INSTALL_DIR contains 'lib' or 'lib64' and 'include' folders
-    if(WIN32)
-        if(NOT IS_DIRECTORY "${OPENSSL_INSTALL_DIR}/lib" OR NOT IS_DIRECTORY "${OPENSSL_INSTALL_DIR}/include")
-            message(FATAL_ERROR "OPENSSL_INSTALL_DIR environment variable is not set correctly or ${OPENSSL_INSTALL_DIR} does not contain 'lib' and 'include' folders. Please also ensure crypto and openssl libraries are present in ${OPENSSL_INSTALL_DIR}/lib folder.")
-        elseif(NOT EXISTS "${OPENSSL_INSTALL_DIR}/lib/libcrypto.lib" OR NOT EXISTS "${OPENSSL_INSTALL_DIR}/lib/libssl.lib")
-            message(FATAL_ERROR "${OPENSSL_INSTALL_DIR}/lib does not contain 'libcrypto.lib' and 'libssl.lib' libraries.")
-        else()
-            message(STATUS "OPENSSL_INSTALL_DIR environment variable is set correctly.")
-        endif()
-    elseif(UNIX)
-        if(NOT ((IS_DIRECTORY "${OPENSSL_INSTALL_DIR}/lib64" OR IS_DIRECTORY "${OPENSSL_INSTALL_DIR}/lib") AND (IS_DIRECTORY "${OPENSSL_INSTALL_DIR}/include")))
-            message(FATAL_ERROR "OPENSSL_INSTALL_DIR environment variable is not set correctly or ${OPENSSL_INSTALL_DIR} does not contain 'lib' or 'lib64' and 'include' folders. Please also ensure crypto and openssl libraries are present in ${OPENSSL_INSTALL_DIR}/lib or ${OPENSSL_INSTALL_DIR}/lib64 folder.")
-        elseif((IS_DIRECTORY "${OPENSSL_INSTALL_DIR}/lib64" AND (NOT EXISTS "${OPENSSL_INSTALL_DIR}/lib64/libcrypto.so" OR NOT EXISTS "${OPENSSL_INSTALL_DIR}/lib64/libssl.so")) OR (IS_DIRECTORY "${OPENSSL_INSTALL_DIR}/lib" AND (NOT EXISTS "${OPENSSL_INSTALL_DIR}/lib/libcrypto.so" OR NOT EXISTS "${OPENSSL_INSTALL_DIR}/lib/libssl.so")))
-            message(FATAL_ERROR "${OPENSSL_INSTALL_DIR} does not contain 'libcrypto.so' and 'libssl.so' libraries in 'lib' or 'lib64' folder.")
-        else()
-            message(STATUS "OPENSSL_INSTALL_DIR environment variable is set correctly.")
-        endif()
-    endif()
-
-    if(NOT ENABLE_AOCL_UTILS)
-        set(ENABLE_AOCL_UTILS ON)
-        include(aocl_utils_build.cmake)
-    endif()
-    include(aocl_crypto_build.cmake)
-endif()
-
-# Merge def files on Windows
-if(BUILD_SHARED_LIBS AND WIN32)
-    string(REPLACE "\\" "/" MERGED_DEF "${CMAKE_BINARY_DIR}/exports.def")
-    file(WRITE ${MERGED_DEF} "")
-    foreach(DEF_FILE IN LISTS DEF_FILES)
-        file(READ ${DEF_FILE} DEF_CONTENT)
-        file(APPEND ${MERGED_DEF} "${DEF_CONTENT}\n")
-    endforeach()
-    message(STATUS "DEF_FILES : ${DEF_FILES}")
-endif()
-
-# Create the library target
-if(BUILD_SHARED_LIBS)
-    add_library (${PROJECT_NAME} SHARED ${OBJECT_FILES})
-    set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    set_target_properties(${PROJECT_NAME} PROPERTIES LINKER_LANGUAGE CXX)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${DEPENDENT_LIBS})
-    
-    if(ENABLE_MULTITHREADING)
-        if(WIN32 OR NOT OpenMP_libomp_LIBRARY)
-            target_link_libraries(${PROJECT_NAME} PRIVATE OpenMP::OpenMP_C)
-        else()
-            target_link_libraries(${PROJECT_NAME} PRIVATE ${OpenMP_libomp_LIBRARY})
-        endif()
-    endif()
-    
-    if(WIN32)
-        target_link_options(${PROJECT_NAME} PRIVATE "/DEF:${MERGED_DEF}")
-        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /dll")
-		if(CMAKE_Fortran_COMPILER)
-	        target_link_directories(${PROJECT_NAME} PRIVATE "C:/Program Files (x86)/Intel/oneAPI/compiler/latest/lib")
-		endif()
-    else()
-        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-            set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=ld")
-        endif()
-        add_library (${PROJECT_NAME}-static STATIC ${OBJECT_FILES})
-        set_target_properties(${PROJECT_NAME}-static PROPERTIES LINKER_LANGUAGE CXX)
-        set_target_properties(${PROJECT_NAME}-static PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
-        install(TARGETS ${PROJECT_NAME}-static LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-                ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-                RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-                )
-    endif()
-else()
-    add_library (${PROJECT_NAME} STATIC ${OBJECT_FILES})
-    set_target_properties(${PROJECT_NAME} PROPERTIES LINKER_LANGUAGE CXX)
-endif()
-
-# Install the library
-install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-        RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-        )
-
-# === SYMBOL RENAMING INTEGRATION ===
-# Single variable to control symbol renaming: if empty, renaming is disabled
-# If set to a prefix (e.g., "AOCL_"), renaming is enabled with that prefix
-set(SYMBOL_RENAME_PREFIX "" CACHE STRING "Prefix for symbol renaming (empty to disable)")
-
-# Check if LibMem is enabled - symbol renaming is incompatible with LibMem
-# LibMem uses IFUNC (indirect functions) that must retain standard C library names (memcpy, memset, etc.)
-if(ENABLE_AOCL_LIBMEM AND SYMBOL_RENAME_PREFIX)
-    message(FATAL_ERROR "Symbol renaming is not compatible with AOCL-LibMem. "
-                        "LibMem uses IFUNC symbols that must retain standard C library names. "
-                        "Please either disable LibMem (ENABLE_AOCL_LIBMEM=OFF) or "
-                        "disable symbol renaming by omitting the SYMBOL_RENAME_PREFIX option.")
-endif()
-
-# Function to create symbol renaming target
-function(add_symbol_renaming_target)
-    if(SYMBOL_RENAME_PREFIX)
-        # Find Python interpreter
-        find_package(Python3 COMPONENTS Interpreter REQUIRED)
-        
-        # Determine the installation package path
-        set(INSTALL_PACKAGE_PATH "${CMAKE_INSTALL_PREFIX}")
-        
-        # Determine additional libraries needed for shared library creation
-        set(SO_ADDITIONAL_LIBS "-lstdc++ -lpthread")
-        if(ENABLE_AOCL_LAPACK OR ENABLE_AOCL_BLAS OR ENABLE_AOCL_DA)
-            set(SO_ADDITIONAL_LIBS "${SO_ADDITIONAL_LIBS} -lgfortran -lquadmath")
-        endif()
-        
-        # Handle OpenMP flags properly based on configuration
-        if(ENABLE_MULTITHREADING)
-            if(OpenMP_libomp_LIBRARY AND EXISTS "${OpenMP_libomp_LIBRARY}")
-                # Use explicit OpenMP library path provided by user
-                set(SO_ADDITIONAL_LIBS "${SO_ADDITIONAL_LIBS} ${OpenMP_libomp_LIBRARY}")
-            elseif(OpenMP_C_FLAGS)
-                # Use OpenMP flags from find_package(OpenMP)
-                set(SO_ADDITIONAL_LIBS "${SO_ADDITIONAL_LIBS} ${OpenMP_C_FLAGS}")
-            else()
-                # Fallback to -fopenmp (libgomp for GCC and libomp for AOCC/Clang)
-                set(SO_ADDITIONAL_LIBS "${SO_ADDITIONAL_LIBS} -fopenmp")
-            endif()
-        endif()
-        
-        # Create optional custom target for symbol renaming (only runs when explicitly called)
-        if(BUILD_SHARED_LIBS)
-            add_custom_target(rename_symbols
-                COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/rename_symbols.py 
-                        ${INSTALL_PACKAGE_PATH} ${SYMBOL_RENAME_PREFIX}
-                        --create-so --so-libs '${SO_ADDITIONAL_LIBS}'
-                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-                COMMENT "Symbol renaming in AOCL libraries with ${SYMBOL_RENAME_PREFIX} prefix and shared library creation (run after install)"
-                VERBATIM
-            )
-            set(RENAME_MODE_MSG "Renaming symbols in static library and creating shared library using renamed static library")
-        else()
-            add_custom_target(rename_symbols
-                COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/rename_symbols.py 
-                        ${INSTALL_PACKAGE_PATH} ${SYMBOL_RENAME_PREFIX}
-                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-                COMMENT "Symbol renaming in AOCL static library with ${SYMBOL_RENAME_PREFIX} prefix (run after install)"
-                VERBATIM
-            )
-            set(RENAME_MODE_MSG "Renaming symbols in static library only")
-        endif()
-        
-        # Create post-install custom command that runs after installation
-        install(CODE "
-            message(STATUS \"Running symbol renaming post-install...\")
-            message(STATUS \"Mode: ${RENAME_MODE_MSG}\")
-            
-            # Verify installation directory exists and has proper structure
-            if(NOT EXISTS \"${CMAKE_INSTALL_PREFIX}/lib\")
-                message(FATAL_ERROR \"Installation directory structure incomplete: ${CMAKE_INSTALL_PREFIX}/lib not found\")
-            endif()
-            
-            # Check if Python is available
-            find_program(PYTHON_EXECUTABLE python3 python)
-            if(NOT PYTHON_EXECUTABLE)
-                message(WARNING \"Python not found. Skipping symbol renaming.\")
-                return()
-            endif()
-            
-            # Check if rename_symbols.py exists
-            set(RENAME_SCRIPT \"${CMAKE_SOURCE_DIR}/rename_symbols.py\")
-            if(NOT EXISTS \"\${RENAME_SCRIPT}\")
-                message(WARNING \"Symbol renaming script not found: \${RENAME_SCRIPT}\")
-                message(STATUS \"Skipping symbol renaming.\")
-                return()
-            endif()
-            
-            # Run the symbol renaming script with appropriate options
-            if(\"${BUILD_SHARED_LIBS}\" STREQUAL \"ON\")
-                message(STATUS \"Executing: \${PYTHON_EXECUTABLE} \${RENAME_SCRIPT} ${CMAKE_INSTALL_PREFIX} ${SYMBOL_RENAME_PREFIX} --create-so --so-libs ${SO_ADDITIONAL_LIBS} --compiler ${CMAKE_C_COMPILER} --linker-flags \\\"${CMAKE_SHARED_LINKER_FLAGS}\\\"\")
-                execute_process(
-                    COMMAND \${PYTHON_EXECUTABLE} \${RENAME_SCRIPT} ${CMAKE_INSTALL_PREFIX} ${SYMBOL_RENAME_PREFIX} --create-so --so-libs ${SO_ADDITIONAL_LIBS} --compiler ${CMAKE_C_COMPILER} --linker-flags \"${CMAKE_SHARED_LINKER_FLAGS}\"
-                    WORKING_DIRECTORY \"${CMAKE_SOURCE_DIR}\"
-                    RESULT_VARIABLE RENAME_RESULT
-                    OUTPUT_VARIABLE RENAME_OUTPUT
-                    ERROR_VARIABLE RENAME_ERROR
-                )
-            else()
-                message(STATUS \"Executing: \${PYTHON_EXECUTABLE} \${RENAME_SCRIPT} ${CMAKE_INSTALL_PREFIX} ${SYMBOL_RENAME_PREFIX}\")
-                execute_process(
-                    COMMAND \${PYTHON_EXECUTABLE} \${RENAME_SCRIPT} ${CMAKE_INSTALL_PREFIX} ${SYMBOL_RENAME_PREFIX}
-                    WORKING_DIRECTORY \"${CMAKE_SOURCE_DIR}\"
-                    RESULT_VARIABLE RENAME_RESULT
-                    OUTPUT_VARIABLE RENAME_OUTPUT
-                    ERROR_VARIABLE RENAME_ERROR
-                )
-            endif()
-            
-            # Check if renaming was successful
-            if(RENAME_RESULT EQUAL 0)
-                message(STATUS \"Symbol renaming completed successfully!\")
-                message(STATUS \"Original libraries preserved in: ${CMAKE_INSTALL_PREFIX}/lib\")
-                message(STATUS \"Renamed libraries created in: ${CMAKE_INSTALL_PREFIX}/renamed/lib\")
-                if(EXISTS \"${CMAKE_INSTALL_PREFIX}/renamed/include\")
-                    message(STATUS \"Renamed headers created in: ${CMAKE_INSTALL_PREFIX}/renamed/include\")
-                endif()
-                if(\"${BUILD_SHARED_LIBS}\" STREQUAL \"ON\")
-                    message(STATUS \"Created shared libraries from renamed static libraries\")
-                endif()
-                message(STATUS \"All renamed symbols now have ${SYMBOL_RENAME_PREFIX} prefix\")
-            else()
-                message(STATUS \"Symbol renaming failed with exit code: \${RENAME_RESULT}\")
-                if(RENAME_ERROR)
-                    message(STATUS \"Error: \${RENAME_ERROR}\")
-                endif()
-                if(RENAME_OUTPUT)
-                    message(STATUS \"Output: \${RENAME_OUTPUT}\")
-                endif()
-                message(STATUS \"You can manually run symbol renaming after build:\")
-                if(\"${BUILD_SHARED_LIBS}\" STREQUAL \"ON\")
-                    message(STATUS \"  python3 ${CMAKE_SOURCE_DIR}/rename_symbols.py ${CMAKE_INSTALL_PREFIX} ${SYMBOL_RENAME_PREFIX} --create-so --so-libs '${SO_ADDITIONAL_LIBS}' --compiler ${CMAKE_C_COMPILER} --linker-flags '${CMAKE_SHARED_LINKER_FLAGS}'\")
-                else()
-                    message(STATUS \"  python3 ${CMAKE_SOURCE_DIR}/rename_symbols.py ${CMAKE_INSTALL_PREFIX} ${SYMBOL_RENAME_PREFIX}\")
-                endif()
-            endif()
-        ")
-    else()
-        message(STATUS "Symbol renaming is disabled. To enable, use: -DSYMBOL_RENAME_PREFIX=<prefix>")
-        message(STATUS "  Example: -DSYMBOL_RENAME_PREFIX=AOCL_ or -DSYMBOL_RENAME_PREFIX=AOCL51_ etc.")
-    endif()
-endfunction()
-
-# Call the function to set up symbol renaming
-add_symbol_renaming_target()
+# AOCL-ScaLAPACK is built SEPARATELY and linked against the finished unified
+# libaocl (NOT merged into it); included AFTER aocl_unified.cmake so the 'aocl'
+# target already exists to depend on and link.
+include(${AOCL_TB_CMAKE_DIR}/aocl_scalapack.cmake)
 
 # Add test subdirectory if tests are enabled
 if(ENABLE_TESTS)

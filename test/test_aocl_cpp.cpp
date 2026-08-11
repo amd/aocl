@@ -22,47 +22,6 @@
 #include "aoclda.h"
 #endif
 
-#ifndef SYMBOL_PREFIX_TOKEN_LOWER
-#define SYMBOL_PREFIX_TOKEN_LOWER aocl_
-#endif
-
-#ifndef SYMBOL_PREFIX_STR
-#define SYMBOL_PREFIX_STR "aocl_"
-#endif
-
-#define CONCAT_IMPL(a, b) a##b
-#define CONCAT(a, b) CONCAT_IMPL(a, b)
-#define PREFIX_LOWER(name) CONCAT(SYMBOL_PREFIX_TOKEN_LOWER, name)
-
-#ifdef USE_RENAMED_SYMBOLS
-#ifdef ENABLE_CRYPTO
-#define ALCP_CIPHER_CONTEXT_SIZE PREFIX_LOWER(alcp_cipher_context_size)
-#define ALCP_CIPHER_REQUEST PREFIX_LOWER(alcp_cipher_request)
-#define ALCP_CIPHER_INIT PREFIX_LOWER(alcp_cipher_init)
-#define ALCP_CIPHER_ENCRYPT PREFIX_LOWER(alcp_cipher_encrypt)
-#define ALCP_CIPHER_DECRYPT PREFIX_LOWER(alcp_cipher_decrypt)
-#define ALCP_CIPHER_FINISH PREFIX_LOWER(alcp_cipher_finish)
-#define ALCP_IS_ERROR PREFIX_LOWER(alcp_is_error)
-#endif
-
-#ifdef ENABLE_UTILS
-#define AU_CPUID_IS_AMD PREFIX_LOWER(au_cpuid_is_amd)
-#define AU_CPUID_GET_VENDOR PREFIX_LOWER(au_cpuid_get_vendor)
-#define AU_CPUID_ARCH_IS_ZEN_FAMILY PREFIX_LOWER(au_cpuid_arch_is_zen_family)
-#endif
-
-#ifdef ENABLE_DA
-#define DA_HANDLE_INIT_D PREFIX_LOWER(da_handle_init_d)
-#define DA_INTERPOLATION_SELECT_MODEL_D PREFIX_LOWER(da_interpolation_select_model_d)
-#define DA_INTERPOLATION_SET_SITES_UNIFORM_D PREFIX_LOWER(da_interpolation_set_sites_uniform_d)
-#define DA_INTERPOLATION_SET_VALUES_D PREFIX_LOWER(da_interpolation_set_values_d)
-#define DA_INTERPOLATION_INTERPOLATE_D PREFIX_LOWER(da_interpolation_interpolate_d)
-#define DA_INTERPOLATION_EVALUATE_D PREFIX_LOWER(da_interpolation_evaluate_d)
-#define DA_HANDLE_DESTROY PREFIX_LOWER(da_handle_destroy)
-#endif
-
-#define SYMBOL_PREFIX SYMBOL_PREFIX_STR
-#else
 #ifdef ENABLE_CRYPTO
 #define ALCP_CIPHER_CONTEXT_SIZE alcp_cipher_context_size
 #define ALCP_CIPHER_REQUEST alcp_cipher_request
@@ -90,7 +49,6 @@
 #endif
 
 #define SYMBOL_PREFIX "None"
-#endif
 
 extern "C" {
 #ifdef ENABLE_CRYPTO

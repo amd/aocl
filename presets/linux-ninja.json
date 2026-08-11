@@ -29,7 +29,8 @@
                 "ENABLE_AOCL_LAPACK": "ON",
                 "OpenMP_libomp_LIBRARY": "$env{ONEAPI_ROOT}/compiler/latest/lib/libiomp5.so",
                 "CMAKE_C_COMPILER": "gcc",
-                "CMAKE_CXX_COMPILER": "g++"
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_Fortran_COMPILER": "gfortran"
             },
             "hidden": false
           },
@@ -44,7 +45,8 @@
                 "ENABLE_AOCL_SPARSE": "ON",
                 "OpenMP_libomp_LIBRARY": "$env{ONEAPI_ROOT}/compiler/latest/lib/libiomp5.so",
                 "CMAKE_C_COMPILER": "gcc",
-                "CMAKE_CXX_COMPILER": "g++"
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_Fortran_COMPILER": "gfortran"
             },
             "hidden": false
           },
@@ -57,7 +59,8 @@
                 "ENABLE_AOCL_LAPACK": "ON",
                 "OpenMP_libomp_LIBRARY": "$env{ONEAPI_ROOT}/compiler/latest/lib/libiomp5.so",
                 "CMAKE_C_COMPILER": "gcc",
-                "CMAKE_CXX_COMPILER": "g++"
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_Fortran_COMPILER": "gfortran"
             },
             "hidden": false
           },
@@ -70,7 +73,8 @@
                 "ENABLE_AOCL_LAPACK": "ON",
                 "OpenMP_libomp_LIBRARY": "$env{ONEAPI_ROOT}/compiler/latest/lib/libiomp5.so",
                 "CMAKE_C_COMPILER": "clang",
-                "CMAKE_CXX_COMPILER": "clang++"
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_Fortran_COMPILER": "flang"
             },
             "hidden": false
           },
@@ -85,7 +89,8 @@
                 "ENABLE_AOCL_SPARSE": "ON",
                 "OpenMP_libomp_LIBRARY": "$env{ONEAPI_ROOT}/compiler/latest/lib/libiomp5.so",
                 "CMAKE_C_COMPILER": "clang",
-                "CMAKE_CXX_COMPILER": "clang++"
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_Fortran_COMPILER": "flang"
             },
             "hidden": false
           },
@@ -100,7 +105,8 @@
                 "ENABLE_AOCL_SPARSE": "ON",
                 "OpenMP_libomp_LIBRARY": "$env{ONEAPI_ROOT}/compiler/latest/lib/libiomp5.so",
                 "CMAKE_C_COMPILER": "clang",
-                "CMAKE_CXX_COMPILER": "clang++"
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_Fortran_COMPILER": "flang"
             },
             "hidden": false
           },
@@ -116,11 +122,15 @@
                 "ENABLE_AOCL_COMPRESSION": "ON",
                 "ENABLE_AOCL_CRYPTO": "ON",
                 "ENABLE_AOCL_DA": "ON",
+                "ENABLE_AOCL_DLP": "ON",
                 "ENABLE_AOCL_LIBMEM": "ON",
+                "ENABLE_AOCL_OPENRNG": "ON",
+                "ENABLE_AOCL_FFTZ": "ON",
                 "OPENSSL_INSTALL_DIR": "$env{OPENSSL_INSTALL_DIR}",
-                "ENABLE_ADDON": "aocl_gemm",
+                "ENABLE_ADDON": "",
                 "CMAKE_C_COMPILER": "clang",
-                "CMAKE_CXX_COMPILER": "clang++"
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_Fortran_COMPILER": "flang"
             },
             "hidden": false
           },
@@ -136,11 +146,15 @@
                 "ENABLE_AOCL_COMPRESSION": "ON",
                 "ENABLE_AOCL_CRYPTO": "ON",
                 "ENABLE_AOCL_DA": "ON",
+                "ENABLE_AOCL_DLP": "ON",
                 "ENABLE_AOCL_LIBMEM": "ON",
+                "ENABLE_AOCL_OPENRNG": "ON",
+                "ENABLE_AOCL_FFTZ": "ON",
                 "OPENSSL_INSTALL_DIR": "$env{OPENSSL_INSTALL_DIR}",
-                "ENABLE_ADDON": "aocl_gemm",
+                "ENABLE_ADDON": "",
                 "CMAKE_C_COMPILER": "clang",
-                "CMAKE_CXX_COMPILER": "clang++"
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_Fortran_COMPILER": "flang"
             },
             "hidden": false
           },
@@ -156,11 +170,15 @@
                 "ENABLE_AOCL_COMPRESSION": "ON",
                 "ENABLE_AOCL_CRYPTO": "ON",
                 "ENABLE_AOCL_DA": "ON",
+                "ENABLE_AOCL_DLP": "ON",
                 "ENABLE_AOCL_LIBMEM": "ON",
+                "ENABLE_AOCL_OPENRNG": "ON",
+                "ENABLE_AOCL_FFTZ": "ON",
                 "OPENSSL_INSTALL_DIR": "$env{OPENSSL_INSTALL_DIR}",
-                "ENABLE_ADDON": "aocl_gemm",
+                "ENABLE_ADDON": "",
                 "CMAKE_C_COMPILER": "gcc",
-                "CMAKE_CXX_COMPILER": "g++"
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_Fortran_COMPILER": "gfortran"
             },
             "hidden": false
           },
@@ -176,11 +194,15 @@
                 "ENABLE_AOCL_COMPRESSION": "ON",
                 "ENABLE_AOCL_CRYPTO": "ON",
                 "ENABLE_AOCL_DA": "ON",
+                "ENABLE_AOCL_DLP": "ON",
                 "ENABLE_AOCL_LIBMEM": "ON",
+                "ENABLE_AOCL_OPENRNG": "ON",
+                "ENABLE_AOCL_FFTZ": "ON",
                 "OPENSSL_INSTALL_DIR": "$env{OPENSSL_INSTALL_DIR}",
-                "ENABLE_ADDON": "aocl_gemm",
+                "ENABLE_ADDON": "",
                 "CMAKE_C_COMPILER": "gcc",
-                "CMAKE_CXX_COMPILER": "g++"
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_Fortran_COMPILER": "gfortran"
             },
             "hidden": false
           }

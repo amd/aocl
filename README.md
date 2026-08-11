@@ -1,152 +1,111 @@
 # AOCL Build-It-Yourself
 
-AOCL now offers the capability to compile individual libraries and
+AOCL offers the capability to compile individual libraries and
 consolidate them into a unified binary. With the Build-It-Yourself
 feature, you can choose one or more AOCL libraries and merge them into a
 single library by configuring the appropriate CMake options. This
-unified binary is assigned a default name: `libaocl.so`/ `libaocl.a` for
-Linux or `aocl.dll`/ `aocl.lib` for Windows. This approach simplifies
-integration by eliminating dependencies on library linking order and
-preventing API duplication, ensuring smooth and efficient incorporation
-of multiple AOCL libraries.
+approach simplifies integration by eliminating dependencies on library
+linking order and preventing API duplication, ensuring smooth and
+efficient incorporation of multiple AOCL libraries. This unified binary
+is assigned a default name: `libaocl.so`/ `libaocl.a` for Linux or
+`aocl.dll`/ `aocl.lib` for Windows. The base name (`aocl`) can be
+customized with the `-DAOCL_SINGLE_LIBRARY_NAME=<name>` option.
 
 **Note**
 
-Currently, Build-It-Yourself supports selection of AOCL-BLAS,
-AOCL-Utils, AOCL-LAPACK, AOCL-Sparse, AOCL-LibM, AOCL-Compression,
-AOCL-Cryptography, AOCL-Data-Analytics, and AOCL-LibMem libraries only.
+Build-It-Yourself supports selection of AOCL-BLAS, AOCL-Compression,
+AOCL-Cryptography, AOCL-Data-Analytics, AOCL-DLP, AOCL-FFTZ,
+AOCL-LAPACK, AOCL-LibM, AOCL-LibMem, AOCL-OpenRNG, AOCL-Sparse,
+and AOCL-Utils libraries.
 
-Additionally, we provide all AOCL library sources as git submodules in 
-the `submodules` branch of this repository. This enables offline development 
-and ensures consistent versioning across all components, making it easier to 
-build and work with the complete AOCL ecosystem without external dependencies.
+AOCL-ScaLAPACK is also supported, but -- by design it cannot be merged into the
+single binary -- it is built as a *separate* library that links against the
+unified `libaocl`, rather than being folded into it. See
+[Building AOCL-ScaLAPACK](#building-aocl-scalapack).
 
 ## Table of Contents
 
 - [AOCL Build-It-Yourself](#aocl-build-it-yourself)
   - [Table of Contents](#table-of-contents)
   - [Project structure](#project-structure)
-  - [Working with AOCL Library Sources via Git Submodules](#working-with-aocl-library-sources-via-git-submodules)
   - [Configure Build-It-Yourself](#configure-build-it-yourself)
     - [Linux Prerequisites](#linux-prerequisites)
     - [Windows Prerequisites](#windows-prerequisites)
     - [Clone the Repository](#clone-the-repository)
-    - [Configure the Build Options](#configure-the-build-options)
+    - [Configure the Build](#configure-the-build)
     - [Build the Unified Binary](#build-the-unified-binary)
-  - [Examples of Configuration and Build Commands using CMake Presets](#examples-of-configuration-and-build-commands-using-cmake-presets)
+  - [Using CMake Presets](#using-cmake-presets)
     - [Introduction](#introduction)
     - [On Linux](#on-linux)
       - [Single-Thread AOCL](#single-thread-aocl)
       - [Multi-Thread AOCL](#multi-thread-aocl)
     - [On Windows](#on-windows)
+  - [Enabling Debug and Trace Logging (DTL)](#enabling-debug-and-trace-logging-dtl)
+  - [Building AOCL-ScaLAPACK](#building-aocl-scalapack)
   - [Verifying AOCL Installation](#verifying-aocl-installation)
+  - [AOCL Manifest](#aocl-manifest)
   - [Testing](#testing)
-  - [Symbol Renaming Feature](#symbol-renaming-feature)
-    - [Overview](#overview)
-      - [C++ Wrapper and Namespace Renaming](#c-wrapper-and-namespace-renaming)
-    - [Usage](#usage)
-    - [Examples](#examples)
   - [CMake Variables Reference](#cmake-variables-reference)
-    - [CMake Options to Change Single Library Name](#cmake-options-to-change-single-library-name)
     - [CMake Options to Select Libraries](#cmake-options-to-select-libraries)
+    - [CMake Options for Library Configuration](#cmake-options-for-library-configuration)
+    - [CMake Options for Debug and Trace Logging (DTL)](#cmake-options-for-debug-and-trace-logging-dtl)
+    - [Passing Library-Specific CMake Options](#passing-library-specific-cmake-options)
+    - [CMake Options for Output Library Naming](#cmake-options-for-output-library-naming)
     - [CMake Options for AMD Architecture-Specific Optimizations](#cmake-options-for-amd-architecture-specific-optimizations)
     - [CMake Options for Build Performance](#cmake-options-for-build-performance)
-    - [CMake Options to Set Library Source Path](#cMake-options-to-set-library-source-path)
+    - [CMake Options to Set Library Source Path](#cmake-options-to-set-library-source-path)
+    - [CMake Options to Set GIT Repository and Tag/Branch](#cmake-options-to-set-git-repository-and-tagbranch)
+  - [Build Troubleshooting](#build-troubleshooting)
 
 ## Project Structure
 
-The project is structured as follows:
+The repository is organized as follows:
 
-- `aocl_blis_build.cmake`: CMake script for building AOCL-BLAS.
-- `aocl_compression_build.cmake`: CMake script for building AOCL-COMPRESSION.
-- `aocl_crypto_build.cmake`: CMake script for building AOCL-CRYPTO.
-- `aocl_da_build.cmake`: CMake script for building AOCL-DATA-ANALYTICS.
-- `aocl_libflame_build.cmake`: CMake script for building AOCL-LAPACK.
-- `aocl_libm_build.cmake`: CMake script for building AOCL-LIBM.
-- `aocl_libmem_build.cmake`: CMake script for building AOCL-LIBMEM.
-- `aocl_sparse_build.cmake`: CMake script for building AOCL-SPARSE.
-- `aocl_utils_build.cmake`: CMake script for building AOCL-UTILS.
-- `CMakeLists.txt`: Main CMake script for the AOCL project.
-- `CMakePresets.json`: CMake presets for different build configurations.
-- `LICENSE.txt`: This is consolidated LICENSE file.
-- `NOTICES.txt`: This is Third-Party Notices file.
-- `README.md`: This README file.
-- `commands.txt`: Build and test commands for symbol renaming feature.
-- `rename_symbols.py`: Python script for renaming library symbols with custom prefix.
-- `presets/`: Directory containing preset configurations for different platforms.
-- `submodules/`: Directory containing AOCL library sources as git submodules.
-- `test/`: Directory containing test code for validating library functionality.
-- `test/CMakeLists.txt`: CMake configuration for building test executables.
-- `test/test_aocl_symbols.c`: Test program to validate both original and renamed symbols.
-- `test/test_aocl_cpp.cpp`: C++ test program for AOCL libraries (original + renamed symbol modes).
-- `test/test_rename_symbols_cpp.py`: Python unit tests for C/C++ symbol renaming logic (mangled names, namespace/wrapper/header rewrites).
-
-## Working with AOCL Library Sources via Git Submodules
-
-For easier access to all AOCL library sources, we have included the AOCL library sources 
-as git submodules under the `submodules` branch of the repository:
-
-``` console
-$ git clone --recurse-submodules https://github.com/AMD-AOCL/aocl.git -b submodules
-$ cd aocl/submodules  # Navigate to AOCL library sources
-```
-or
-``` console
-$ git clone --recurse-submodules git@github.com:AMD-AOCL/aocl.git -b submodules
-$ cd aocl/submodules  # Navigate to AOCL library sources
+```text
+aocl/
+├── CMakeLists.txt      Top-level CMake script that drives the unified build
+├── CMakePresets.json   Presets for the supported platforms and compilers
+├── LICENSE.txt         Consolidated license
+├── NOTICES.txt         Third-party notices
+├── README.md           This file
+├── cmake/              Target-based build modules (per-component scripts + helpers)
+├── presets/            Preset fragments included by CMakePresets.json
+└── test/               Test sources and their CMake configuration
 ```
 
-The git submodules include: AOCL-BLAS, AOCL-Compression, AOCL-Cryptography, AOCL-DA, AOCL-LAPACK, 
-AOCL-LibM, AOCL-LibMem, AOCL-ScaLAPACK, AOCL-Sparse, and AOCL-Utils.
+`build/` and `install_package/` are generated at build time (the build tree and
+the install output, respectively) and are not part of the committed sources.
 
-Alternatively, only selected submodules can be downloaded. The following table shows the mapping 
-between AOCL library names and their corresponding submodule names:
+**`cmake/`** — one build script per component (`aocl_blas.cmake`,
+`aocl_lapack.cmake`, `aocl_sparse.cmake`, `aocl_crypto.cmake`, `aocl_libm.cmake`,
+`aocl_compression.cmake`, `aocl_da.cmake`, `aocl_libmem.cmake`, `aocl_utils.cmake`,
+`aocl_fftz.cmake`, `aocl_openrng.cmake`, `aocl_dlp.cmake`) that builds the
+component in-tree and folds its object files into the unified library, plus the
+shared helpers:
 
-| AOCL Library Name    | Submodule Name                  |
-|-----------------------------|--------------------------|
-| **AOCL-BLAS**        | `submodules/blis`               |
-| **AOCL-Compression** | `submodules/aocl-compression`   |
-| **AOCL-Cryptography**| `submodules/aocl-crypto`        |
-| **AOCL-DA**          | `submodules/aocl-data-analytics`|
-| **AOCL-LAPACK**      | `submodules/libflame`           |
-| **AOCL-LibM**        | `submodules/aocl-libm`          |
-| **AOCL-LibMem**      | `submodules/aocl-libmem`        |
-| **AOCL-ScaLAPACK**   | `submodules/aocl-scalapack`     |
-| **AOCL-Sparse**      | `submodules/aocl-sparse`        |
-| **AOCL-Utils**       | `submodules/aocl-utils`         |
+- `aocl_options.cmake` — centralized build-options layer.
+- `aocl_targets_common.cmake` — common target and staging helpers.
+- `aocl_unified.cmake` — assembles the final unified `libaocl`.
+- `aocl_gen_def.cmake` — generates the Windows export `.def` file.
+- `aocl_gen_manifest.cmake` — embeds the build manifest into the library.
 
-**Example 1: Download only AOCL-BLAS, AOCL-LAPACK, and AOCL-Utils**
-``` console
-$ git clone https://github.com/AMD-AOCL/aocl.git -b submodules
-$ cd aocl
-$ git submodule init
-$ git submodule update submodules/blis submodules/libflame submodules/aocl-utils
-```
+**`test/`** — built when configured with `-DENABLE_TESTS=ON`:
 
-**Example 2: Download only AOCL-Sparse and AOCL-Compression**
-``` console
-$ git clone https://github.com/AMD-AOCL/aocl.git -b submodules
-$ cd aocl
-$ git submodule init
-$ git submodule update submodules/aocl-sparse submodules/aocl-compression
-```
-
-**Note:** AOCL-Utils (`submodules/aocl-utils`) is required as a dependency for all AOCL libraries except AOCL-BLAS. 
-When downloading selective submodules, ensure that `submodules/aocl-utils` is included unless you are only building AOCL-BLAS.
-
-This approach provides:
-- All AOCL library sources locally available
-- Consistent versioning across all components
-- Simplified build process without external dependencies
-- Offline development capability
-
+- `CMakeLists.txt` — builds the test executables (registered with CTest).
+- `test_aocl_symbols.c` / `test_aocl_symbols.h` — C tests for AOCL symbols.
+- `test_aocl_cpp.cpp` — C++ API tests.
+- `test_aocl_cpp_templates.cpp` — C++ template-interface tests for AOCL-DA and AOCL-Sparse.
+- `mix_libraries.F90` — Fortran interop test exercising the BLAS F77 interface
+  (`dgemm`, `lsame`) and the BLIS-native C API (`bli_thread_get_num_threads`)
+  together, with OpenMP.
 
 ## Configure Build-It-Yourself
 
 This section explains how to configure the CMake options and the
 procedure to build the unified AOCL binary on both Linux and Windows
-platforms. Note that the procedure to configure is the same for both OSs
-but the only difference is in the prerequisites for each OS.
+platforms. Note that the procedure to configure is the same for Windows
+and Linux. For library specific dependencies and pre-requisites, kindly
+refer the corresponding sections of the Userguide.
 
 The following sub-sections describe the process:
 
@@ -159,50 +118,22 @@ The following sub-sections describe the process:
 
 The following dependencies must be met for installing AOCL on Linux:
 
--   Target CPU with support for FMA, AVX2 or higher
-
 -   Git
 
 -   Python
 
 -   CMake
 
--   GCC, g++, and Gfortran
+-   GCC and g++
 
 -   AOCC
 
--   OpenSSL for AOCL-Cryptography:
-
-    -   Define the environment variable `OPENSSL_INSTALL_DIR` to point
-        to OpenSSL installation:
-
-    ``` bash
-    $ export OPENSSL_INSTALL_DIR=/home/user/openssl
-    ```
-
--   Boost libraries for AOCL-Data-Analytics:
-
-    -   Define the environment variable `BOOST_ROOT` to point
-        to Boost installation:
-
-    ``` bash
-    $ export BOOST_ROOT=/home/user/boost
-    ```
-
-**Note**
-
-To build the AOCL-Cryptography library, the `libcrypto.so` and
-`libssl.so` libraries are required. Set the `OPENSSL_INSTALL_DIR`
-environment variable to the path where OpenSSL is installed. Ensure this
-directory includes the `include` folder and either `lib` or `lib64`.
-Within the `lib` or `lib64` folder, verify that the `libcrypto.so` and
-`libssl.so` libraries are present.
+-   GNU Make (default generator) or Ninja (required only for the Ninja-based
+    presets)
 
 ### Windows Prerequisites
 
 The following dependencies must be met for building AOCL on Windows:
-
--   Target CPU with support for FMA, AVX2 or higher
 
 -   LLVM
 
@@ -216,59 +147,71 @@ The following dependencies must be met for building AOCL on Windows:
     -   Desktop development with C++: C++ Clang-Cl for v142 build
         tool(x64/x86)
 
--   OpenSSL for AOCL-Cryptography:
+-   Ninja (required only for the Ninja-based presets, for example
+    `aocl-win-ninja-*`).
 
-    -   Define the environment variable `OPENSSL_INSTALL_DIR` to point
-        to OpenSSL installation:
-
-    ``` console
-    $ set OPENSSL_INSTALL_DIR=C:/Program Files/OpenSSL-Win64
-    ```
--   Boost libraries for AOCL-Data-Analytics.
+For more information on validated versions of compiler/LLVM, CMake, and
+Python refer to the `Validation Matrix` chapter in the AOCL userguide document.
 
 **Note**
 
-To build the AOCL-Cryptography library, the `libcrypto.lib` and
-`libssl.lib` libraries are required. Set the `OPENSSL_INSTALL_DIR`
-environment variable to the directory where OpenSSL is installed. Make
-sure this directory includes the `include` and `lib` folders. Within the
-`lib` folder, ensure that the `libcrypto.lib` and `libssl.lib` libraries
-are present.
-
-For more information on validated versions of compiler/LLVM, CMake and
-Python, OpenSSL, and Boost libraries refer to `Validation Matrix` chapter in 
-AOCL userguide document.
+Before configuring, ensure the source for every library you enable -- and for
+its AOCL dependencies (for example, AOCL-LAPACK requires AOCL-BLAS and
+AOCL-Utils) -- is available: supplied via the corresponding `<LIB>_PATH` option,
+or reachable through its `<LIB>_GIT_REPOSITORY`. Enabling a library automatically
+enables its AOCL dependencies, but their sources must still be provided; a source
+with no `<LIB>_PATH` is otherwise fetched from its git repository at configure
+time, which requires network access.
 
 To set up and use Build-It-Yourself, you must clone the repository,
 configure the build options, and build the unified binary.
 
-### Configure the Build Options
+### Clone the Repository
+
+Clone the repository:
+
+``` console
+$ git clone https://github.com/AMD-AOCL/aocl.git
+$ cd aocl
+```
+
+### Configure the Build
 
 There are multiple CMake options you can configure. The following
 sections explain the CMake options to:
 
-1.  Alter the name of the generated single library (see
-    [CMake Options to Change Single Library Name](#cmake-options-to-change-single-library-name)).
-2.  Include or exclude individual AOCL libraries (see
+1.  Include or exclude individual AOCL libraries (see
     [CMake Options to Select Libraries](#cmake-options-to-select-libraries)).
-3.  Provide the source code for the selected libraries by using one of
+
+2.  Provide the source code for the selected libraries by using one of
     the following options:
+
     1.  Setting the path of the AOCL libraries source code (see
-        [CMake Options to Set Library Source Path](#cMake-options-to-set-library-source-path))
+        [CMake Options to Set Library Source Path](#cmake-options-to-set-library-source-path))
     2.  Setting the GIT repository and tag or branch name (see
         [CMake Options to Set GIT Repository and Tag/Branch](#cmake-options-to-set-git-repository-and-tagbranch))
-4.  Static or Shared Library:
-    1.  Static Library `-DBUILD_SHARED_LIBS=OFF`
-    2.  Shared Library `-DBUILD_SHARED_LIBS=ON` (default)
-5.  Select Data Type (LP64 or ILP64):
+
+3.  Static or Shared Library:
+
+    1.  Shared Library `-DBUILD_SHARED_LIBS=ON` (default)
+    2.  Static Library `-DBUILD_SHARED_LIBS=OFF`
+
+4.  Select Data Type (LP64 or ILP64):
+
     1.  LP64 `-DENABLE_ILP64=OFF` (default)
     2.  ILP64 `-DENABLE_ILP64=ON`
-6.  Enable or disable threading:
-    1.  Multithreading `-DENABLE_MULTITHREADING=ON`
-    2.  Single threading `-DENABLE_MULTITHREADING=OFF` (default)
-7.  Link Desired OpenMP library using
+
+5.  Enable or disable threading:
+
+    1.  Single threading `-DENABLE_MULTITHREADING=OFF` (default)
+    2.  Multithreading `-DENABLE_MULTITHREADING=ON`
+
+6.  Link Desired OpenMP library using
     `-DOpenMP_libomp_LIBRARY=<path to OpenMP library>` when,
     `-DENABLE_MULTITHREADING=ON`.
+
+7.  Optionally set a custom base name for the unified library using
+    `-DAOCL_SINGLE_LIBRARY_NAME=<name>` (default `aocl`).
 
 Here is an example of a configuration command:
 
@@ -290,19 +233,22 @@ $ cmake -S . -B build -G "Visual Studio 17 2022" -DCMAKE_BUILD_TYPE=Release
 -DCMAKE_INSTALL_PREFIX=%CD%/install_package -DCMAKE_CONFIGURATION_TYPES=Release
 ```
 
+Replace the `-G` generator with the one matching your installed Visual Studio
+version (for example, `Visual Studio 16 2019`).
+
 ### Build the Unified Binary
 
 Use the following command to build the unified binary:
 
 ``` console
-$ cmake --build build --config release --target install
+$ cmake --build build --config Release --target install
 ```
 
-## Examples of Configuration and Build Commands using CMake Presets
+## Using CMake Presets
 
 ### Introduction
 
-The AOCL project provides a set of CMake presets to simplify the
+The AOCL Build-It-Yourself project provides a set of CMake presets to simplify the
 configuration and build process for different platforms and compilers.
 Some of these presets are:
 
@@ -355,29 +301,9 @@ customization based on specific requirements.
     -   **CMAKE_Fortran_COMPILER**: `gfortran` Specifies GFortran as the
         Fortran compiler.
 
--   Required Environment Variables: Before running this preset, ensure
-    the following environment variables are set:
-
-    1.  **OPENSSL_INSTALL_DIR**: Points to the directory where OpenSSL
-        is installed. This is required for building the
-        AOCL-Cryptography library. Ensure this directory contains the
-        `include` folder and either the `lib` or `lib64` folder with
-        `libcrypto.so` and `libssl.so` libraries.
-
-    2.  **ONEAPI_ROOT / oneAPI_ROOT**: Specifies the root directory of
-        the Intel oneAPI toolkit. Use **ONEAPI_ROOT** for Linux and
-        **oneAPI_ROOT** for Windows. This is **mandatory for Windows**
-        and **optional for Linux**. It is required if you want to use
-        the Intel OpenMP runtime library.
-
-        -   **Linux**: The library is typically located at:
-            `$env{ONEAPI_ROOT}/compiler/latest/lib/libiomp5.so`.
-        -   **Windows**: The library is typically located at:
-            `$env{oneAPI_ROOT}/compiler/latest/lib/libiomp5md.lib`.
-
-        Ensure that the appropriate environment variable (`ONEAPI_ROOT`
-        or `oneAPI_ROOT`) is set to the correct path where the oneAPI
-        toolkit is installed.
+-   Required Environment Variables: For library-specific environment
+    variables (OpenSSL, Boost, oneAPI, ...), refer to the corresponding
+    library sections of the Userguide.
 
 -   Example Command to Use This Preset: To configure the build using
     this preset, run the following command:
@@ -395,8 +321,8 @@ customization based on specific requirements.
     -   To build a static library, set `-DBUILD_SHARED_LIBS=OFF`.
     -   To disable multithreading, set `-DENABLE_MULTITHREADING=OFF`.
 
-    For more customization options, refer to the CMake variables
-    `configure-the-build-options`{.interpreted-text role="ref"}.
+    For more customization options, refer to
+    [Configure the Build](#configure-the-build).
 
 ### On Linux
 
@@ -405,7 +331,7 @@ commands on Linux using the CMake build system.
 
 **Note**
 
-Use the [-DOpenMP_libomp_LIBRARY]{.title-ref} option to link the desired
+Use the `-DOpenMP_libomp_LIBRARY` option to link the desired
 OpenMP library.
 
 #### Single-Thread AOCL
@@ -433,7 +359,7 @@ Complete the following steps to build and install a single-thread AOCL:
 2.  Build the unified binary and install using the command:
 
     ``` bash
-    $ cmake --build build --config release -j --target install
+    $ cmake --build build --config Release -j --target install
     ```
 
 #### Multi-Thread AOCL
@@ -472,8 +398,8 @@ Complete the following steps to install a multi-thread AOCL:
 **Configure the Project in Command Prompt**
 
 ``` console
-# CMake commands using Visual Studio 17 2022 Generator
-"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat"  x64
+# CMake commands using Microsoft Visual Studio Generator
+"<Path to Visual Studio Auxiliary>\\Build\\vcvarsall.bat"  x64
 
 # Clang/LLVM (Default) and LP64 
 $ cmake --preset aocl-win-msvc-lp-ga-config --fresh 
@@ -488,8 +414,8 @@ $ cmake --preset aocl-win-msvc-lp-ga-config --fresh -DOpenMP_libomp_LIBRARY=<pat
 ``` console
 # CMake commands using Ninja Generator
 
-$ "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat"  x64
-$ set PATH="C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\Ninja";%PATH%
+$ "<Path to Visual Studio Auxiliary>\\Build\\vcvarsall.bat"  x64
+$ set PATH="<Path to Visual Studio Ninja>";%PATH%
 
 # Clang/LLVM (Default) and LP64 
 $ cmake --preset aocl-win-ninja-lp-ga-config --fresh 
@@ -507,6 +433,124 @@ $ cmake --preset aocl-win-ninja-lp-ga-config --fresh -DOpenMP_libomp_LIBRARY=<pa
 $ cmake --build build --config Release --target install
 ```
 
+## Enabling Debug and Trace Logging (DTL)
+
+The AOCL components ship a common **Debug and Trace Logging (DTL)** facility that,
+when enabled at build time, emits API trace and/or input-log files at runtime
+(for example an `aocldtl_trace.txt` trace file in the working directory). DTL is
+**off by default** so production builds carry no logging overhead; enable it only
+when you need to capture the call flow or inputs for debugging.
+
+DTL is currently wired for **AOCL-BLAS** and **AOCL-LAPACK** only; enabling it
+has no effect on the other components.
+
+DTL is controlled at **configure time** with two knobs:
+
+- **Global switch** -- turn DTL on for the DTL-capable components (AOCL-BLAS and
+  AOCL-LAPACK) at once:
+
+  ``` bash
+  # Linux
+  $ cmake --preset aocl-linux-make-lp-ga-gcc-config -DAOCL_DTL=on --fresh
+  ```
+
+  ``` bat
+  :: Windows
+  $ cmake --preset aocl-win-msvc-lp-ga-config -DAOCL_DTL=on --fresh
+  ```
+
+  `-DAOCL_DTL` accepts `off` (default) or `on`.
+
+- **Per-component override** -- enable or disable DTL for a single component,
+  independent of the global default, with `-DAOCL_<COMPONENT>_DTL=<value>` where
+  `<value>` is `inherit` (default -- follow `AOCL_DTL`), `ON`, or `OFF`.
+  `<COMPONENT>` is `BLAS` or `LAPACK`. For example, to keep DTL off globally but
+  turn it on only for AOCL-BLAS and AOCL-LAPACK:
+
+  ``` bash
+  $ cmake --preset aocl-linux-make-lp-ga-gcc-config \
+      -DAOCL_BLAS_DTL=on -DAOCL_LAPACK_DTL=on --fresh
+  ```
+
+See also
+[CMake Options for Debug and Trace Logging (DTL)](#cmake-options-for-debug-and-trace-logging-dtl)
+in the variables reference.
+
+## Building AOCL-ScaLAPACK
+
+By design, AOCL-ScaLAPACK is *not* merged into the single `libaocl` binary like
+the other components. Instead, when `-DENABLE_AOCL_SCALAPACK=ON` is set,
+Build-It-Yourself first builds the unified `libaocl` and then builds
+AOCL-ScaLAPACK as a **separate** library (`libscalapack.so`/`libscalapack.a` on
+Linux, `scalapack.dll`/`scalapack.lib` on Windows) that **links against that
+unified `libaocl`**.
+
+**Why it is kept separate (not merged)**
+
+- AOCL-ScaLAPACK and AOCL-LAPACK have **overlapping functionality**:
+  AOCL-ScaLAPACK carries its own copies of a number of LAPACK-named routines (for
+  example the auxiliary and test-matrix generators under its `TOOLS/LAPACK`
+  tree). Merging AOCL-ScaLAPACK's objects into the same unified `libaocl` --
+  which already contains AOCL-LAPACK (libflame) -- would produce **duplicate,
+  conflicting symbols**, precisely the API duplication the single library is
+  meant to prevent. Building AOCL-ScaLAPACK as a separate library that *links*
+  `libaocl` keeps those symbols out of the unified binary while still resolving
+  the shared BLAS/LAPACK routines from it.
+- As a consequence of linking `libaocl`, AOCL-ScaLAPACK can only be built *after*
+  the unified library exists (its prerequisites AOCL-BLAS, AOCL-Utils, and
+  AOCL-LAPACK live inside `libaocl`). Its own CMake also runs a **configure-time
+  link check** against the BLAS/LAPACK it is handed and silently downloads
+  reference BLAS/LAPACK if that fails; since `libaocl` is not available until the
+  build phase, AOCL-ScaLAPACK is configured and built as an external step (after
+  `libaocl`), where the check resolves against the real `libaocl`.
+
+**What enabling it does**
+
+- Enabling AOCL-ScaLAPACK **auto-enables AOCL-LAPACK** (which itself pulls in
+  AOCL-BLAS and AOCL-Utils), so its prerequisites are present inside `libaocl`;
+  you do not have to enable them by hand.
+- The AOCL-ScaLAPACK library is installed into the **same** `install_package/lib/`
+  directory as the unified `libaocl`, so both sit side by side. AOCL-ScaLAPACK
+  ships no public headers, so nothing is added to `install_package/include/`.
+
+**Prerequisites**
+
+- An **MPI** installation (AOCL-ScaLAPACK is an MPI library and configuration
+  fails without one). Point at it with `-DMPI_BASE_DIR=<path>`, or have a system
+  MPI on the default search paths.
+- A **Fortran compiler** (Linux: `gfortran`; Windows: `ifx`/`ifort`).
+
+**Source**
+
+Like the other components, the AOCL-ScaLAPACK source is taken from a local path
+if given, otherwise cloned from git:
+
+- `-DSCALAPACK_PATH=<parent dir containing 'aocl-scalapack'>` -- use a local copy,
+  or
+- `-DSCALAPACK_GIT_REPOSITORY=<url>` / `-DSCALAPACK_GIT_TAG=<tag/branch>` -- clone
+  (defaults: <https://github.com/amd/aocl-scalapack.git> @ `master`).
+
+**Example (Linux)**
+
+``` bash
+$ cmake --preset aocl-linux-make-lp-ga-gcc-config \
+    -DENABLE_AOCL_SCALAPACK=ON \
+    -DMPI_BASE_DIR=/opt/intel/oneapi/mpi/latest --fresh
+$ cmake --build build --config Release --target install -j
+```
+
+**Example (Windows)**
+
+``` bat
+$ cmake --preset aocl-win-msvc-lp-ga-config ^
+    -DENABLE_AOCL_SCALAPACK=ON ^
+    -DMPI_BASE_DIR="C:/Program Files (x86)/Intel/oneAPI/mpi/latest" --fresh
+$ cmake --build build --config Release --target install
+```
+
+After installation, `install_package/lib/` contains the unified `libaocl`
+alongside the AOCL-ScaLAPACK library.
+
 ## Verifying AOCL Installation
 
 The AOCL package will be installed in the `install_package` directory
@@ -521,6 +565,79 @@ There are two subfolders within the `install_package` folder: `lib` and
     -   On Linux: `libaocl.so` and `libaocl.a`.
     -   On Windows: `aocl.dll` and `aocl.lib`.
 
+If a custom `-DAOCL_SINGLE_LIBRARY_NAME` was set, the binaries are named
+accordingly.
+
+## AOCL Manifest
+
+Every unified AOCL binary is **self-describing**: the build generates a
+small manifest that records exactly how the library was configured and which
+component versions it contains. The manifest is:
+
+- **Embedded** directly into the unified library — on Linux/ELF it lives in a
+  dedicated `.aocl_manifest` section of `libaocl.so` and `libaocl.a`; on Windows
+  it is embedded inside `aocl.dll` / `aocl.lib` and is discoverable as printable
+  strings. An accessor `const char *aocl_get_manifest(void);` is exported so it
+  can also be read at runtime.
+- **Shipped as a plain-text sidecar** at `install_package/lib/aocl_manifest.txt`,
+  which is the easiest way to inspect it without any tooling.
+
+### Manifest Contents
+
+The manifest is delimited by `AOCL-MANIFEST-BEGIN` / `AOCL-MANIFEST-END` and
+contains the following fields:
+
+| Field | Description |
+| --- | --- |
+| `library` | Unified library base name (e.g. `libaocl` on Linux, `aocl` on Windows, or a custom `-DAOCL_SINGLE_LIBRARY_NAME`). |
+| `build_date` | UTC build timestamp. |
+| `linkage` | `static` or `shared`. |
+| `integer_size` | `lp64` (32-bit integer) or `ilp64` (64-bit integer). |
+| `threading` | Threading model (e.g. `single`, `openmp`). |
+| `threading_library` | The threading runtime linked (e.g. the OpenMP library), when applicable. |
+| `architecture` | Target architecture family (e.g. `amdzen`). |
+| `build_type` | CMake build type (e.g. `Release`). |
+| `compiler` | Compiler used for the build. |
+| `component_count` | Number of AOCL components merged into the unified library. |
+| `components` | A list of `- name:` / `version:` entries, one per included component (AOCL-Utils, AOCL-BLAS, AOCL-LAPACK, AOCL-Sparse, AOCL-DA, AOCL-LibM, AOCL-Compression, AOCL-Crypto, AOCL-OpenRNG, AOCL-FFTZ, AOCL-DLP, …). |
+
+### Inspecting the Manifest in a Binary
+
+The most portable option is simply to read the installed text sidecar:
+
+```bash
+cat install_package/lib/aocl_manifest.txt          # Linux
+type install_package\lib\aocl_manifest.txt         # Windows
+```
+
+To read the manifest **directly out of a binary**:
+
+**On Linux** — dump the dedicated ELF section with `readelf` (works for the
+shared library):
+
+```bash
+readelf -p .aocl_manifest install_package/lib/libaocl.so
+```
+
+For the static archive (or as a generic fallback that works for both), extract
+the manifest block with `strings`:
+
+```bash
+strings -n 4 install_package/lib/libaocl.a | grep -A60 AOCL-MANIFEST-BEGIN
+```
+
+**On Windows** — the manifest is stored as printable strings inside the binary,
+so extract it with `llvm-strings` and filter for the manifest fields with
+`findstr` (each manifest field is emitted on its own line):
+
+```bat
+"C:\Program Files\LLVM\bin\llvm-strings.exe" -n 4 "install_package\lib\aocl.dll" ^
+  | findstr /b /c:"AOCL-MANIFEST" /c:"library:" /c:"build_date:" /c:"linkage:" ^
+    /c:"integer_size:" /c:"threading:" /c:"threading_library:" /c:"architecture:" ^
+    /c:"build_type:" /c:"compiler:" /c:"component_count:" ^
+    /c:"  - name:" /c:"    version:"
+```
+
 ## Testing
 
 The AOCL Build-It-Yourself project includes comprehensive test executables to validate library functionality. 
@@ -533,134 +650,21 @@ cmake --preset aocl-linux-make-lp-ga-gcc-config \
 
 cd build
 cmake --build . --target install -j 10
-cmake --build . --target test_original_symbols -j 10
-./test/test_original_symbols
+cmake --build . --target test_symbols -j 10
+./test/test_symbols
 ```
 
 **Test Coverage:**
-- 75 test functions covering 9 AOCL libraries
-- Tests include: BLAS, LAPACK, Sparse, LibM, Crypto, Compression, Data Analytics, LibMem, Utils
+- Test functions covering 10 AOCL libraries
+- Tests include: BLAS, LAPACK, Sparse, LibM, Crypto, Compression, Data Analytics, LibMem, Utils, OpenRNG
 - Validates library functionality and API correctness
 
-**Symbol Renaming Tests:**
+**Test executables:** In addition to the C symbol test (`test_symbols`), the suite builds C++ API tests
+(`test_cpp_symbols`, from `test_aocl_cpp.cpp`) and C++ template-interface tests
+(`test_cpp_templates`, from `test_aocl_cpp_templates.cpp`) when the relevant libraries are enabled, plus a
+Fortran mixed-library test (`mix_libraries`). All tests are registered with CTest, so running `ctest` from
+the `build` directory executes the full suite.
 
-When symbol renaming is enabled (with `-DSYMBOL_RENAME_PREFIX=<prefix>`), an additional test executable 
-`test_renamed_symbols` (executable) is built to validate renamed symbols:
-
-```bash
-cmake --preset aocl-linux-make-lp-ga-gcc-config \
-  -DENABLE_TESTS=ON \
-  -DSYMBOL_RENAME_PREFIX=AOCL_
-
-cd build
-cmake --build . --target install -j 10
-cmake --build . --target test_original_symbols test_renamed_symbols -j 10
-./test/test_original_symbols      # Tests original symbols
-./test/test_renamed_symbols       # Tests renamed symbols with prefix
-```
-
-**Note:** When symbol renaming is disabled, only `test_original_symbols` executable is built. When enabled, both 
-`test_original_symbols` and `test_renamed_symbols` (executable) executables are built simultaneously.
-
-In addition to runtime tests, C++ symbol/header rewrite behavior is validated by unit tests in:
-
-- `test/test_rename_symbols_cpp.py`
-
-These tests verify C++ mangled symbol rewriting, namespace fallback updates, API family rewrite behavior, and C++ wrapper identifier renaming in generated headers.
-
-For detailed build commands and troubleshooting, see `commands.txt` in the project root.
-
-## Symbol Renaming Feature
-
-### Overview
-
-AOCL Build-It-Yourself now supports automatic symbol renaming with custom prefixes. This feature allows multiple versions 
-of AOCL libraries to coexist in the same application or system without symbol conflicts. For example, you can have both 
-AOCL 5.1 and AOCL 5.2 installed simultaneously by using different prefixes (e.g., `AOCL51_` and `AOCL52_`).
-
-**Key Features:**
-- **Custom Prefix**: Add any prefix to all exported symbols (e.g., `AOCL_`, `AOCL51_`, `MYLIB_`)
-- **Case-Aware Renaming**: Automatically applies correct case for different symbol types
-  - Symbols beginning with uppercase letters (e.g., `DGEMM_` → `AOCL_DGEMM_`, `LAPACKE_dgetrf` → `AOCL_LAPACKE_dgetrf`)
-  - Symbols beginning with lowercase letters (e.g., `cblas_dgemm` → `aocl_cblas_dgemm`)
-- **Automatic Process**: Symbol renaming happens automatically during installation
-- **Testing Support**: Built-in test executables to validate both original and renamed symbols
-
-### C++ Wrapper and Namespace Renaming
-
-Recent updates address C++ header-level renaming gaps that were not always covered by ELF symbol replacement alone.
-
-**What is now handled:**
-
-- C++ namespace fallback rewrites in wrapper headers:
-    - `namespace blis` → `<prefix>blis` (for example, `aocl_blis` with prefix `aocl_`, or `aoclblis` with prefix `aocl`)
-    - `namespace libflame` → `<prefix>libflame` (for example, `aocl_libflame` with prefix `aocl_`, or `aocllibflame` with prefix `aocl`)
-- C++ wrapper identifier rewrites in selected wrapper headers:
-    - `blis.hh` (for wrapper APIs such as `rotg`, `gemm`, etc.)
-    - `libflame_interface.hh` (for wrapper APIs such as `potrf`, `getrf`, etc.)
-- API-family header rewrites for declarations/wrappers not present as concrete ELF symbols:
-    - `cblas_*`, `lapacke_*`, `blis_*`, `bli_*`, `da_*`, `aoclsparse_*`
-
-**Safety rules applied during header rewrites:**
-
-- Function-like identifiers are rewritten only when they are callable tokens.
-- Type/callback-like identifiers (for example, DA callback typedef names such as `*_t_*`) are not rewritten.
-- `std::` and C++ ABI/runtime symbols are excluded from mangled-symbol renaming.
-- Mangled C++ prefix token preserves caller intent for trailing underscore (for example, prefix `aocl` produces `aoclfoo`, while `AOCL_` produces `AOCL_foo`).
-
-
-### Usage
-
-**Important:** Symbol renaming is **not compatible with AOCL-LibMem**. LibMem uses IFUNC (indirect functions) 
-for runtime CPU dispatch, which requires standard C library names (memcpy, memset, etc.) and cannot be renamed. 
-If you enable both LibMem and symbol renaming, the build will fail with an error. To use symbol renaming, 
-set `-DENABLE_AOCL_LIBMEM=OFF`.
-
-To enable symbol renaming, add the `-DSYMBOL_RENAME_PREFIX=<prefix>` option when configuring CMake:
-
-```bash
-cmake --preset aocl-linux-make-lp-ga-gcc-config \
-  -DENABLE_TESTS=ON \
-  -DSYMBOL_RENAME_PREFIX=AOCL_
-```
-
-**Configuration Options:**
-- **With Symbol Renaming**: `-DSYMBOL_RENAME_PREFIX=AOCL_` (or any custom prefix)
-- **Without Symbol Renaming**: Omit the option or use `-DSYMBOL_RENAME_PREFIX=""`
-
-**Build Process:**
-```bash
-cd build
-cmake --build . --target install -j 10
-```
-
-**Installation Structure:**
-- Original libraries: `install_package/lib/`
-- Renamed libraries: `install_package/renamed/lib/`
-
-### Examples
-
-**1. Default AOCL_ Prefix:**
-```bash
-cmake --preset aocl-linux-make-lp-ga-gcc-config -DSYMBOL_RENAME_PREFIX=AOCL_
-```
-Result: `DGEMM_` → `AOCL_DGEMM_`, `cblas_dgemm` → `aocl_cblas_dgemm`
-
-**2. Multi-Version Deployment:**
-```bash
-# Build AOCL 5.1 with prefix
-cmake -DSYMBOL_RENAME_PREFIX=AOCL51_ ...
-
-# Build AOCL 5.2 with different prefix
-cmake -DSYMBOL_RENAME_PREFIX=AOCL52_ ...
-```
-Result: Both versions can coexist in the same application
-
-**3. Custom Company Prefix:**
-```bash
-cmake --preset aocl-linux-make-lp-ga-gcc-config -DSYMBOL_RENAME_PREFIX=MYCOMPANY_
-```
-Result: `DGEMM_` → `MYCOMPANY_DGEMM_`, `cblas_dgemm` → `mycompany_cblas_dgemm`
 
 ## CMake Variables Reference
 
@@ -669,14 +673,6 @@ to configure the Build-It-Yourself AOCL project. These variables allow
 customization of the build process, including selecting libraries and
 specifying source paths. Use these options to tailor the unified AOCL
 binary to specific requirements.
-
-### CMake Options to Change Single Library Name
-
-The following table lists the CMake variable used to specify the name of the unified library
-
-| CMake Variable or Option  | Usage |
-|---------------------------|---------------------------------------------------------------|
-| **AOCL_SINGLE_LIBRARY_NAME** | `-DAOCL_SINGLE_LIBRARY_NAME=<value>` to generate `lib<value>.{a,so}` on Linux and `<value>.{lib,dll}` on Windows. If not specified, `<value>` defaults to `aocl` |
 
 ### CMake Options to Select Libraries
 
@@ -694,6 +690,10 @@ individual AOCL libraries.
 | **ENABLE_AOCL_COMPRESSION** | `-DENABLE_AOCL_COMPRESSION=OFF` (default) or `-DENABLE_AOCL_COMPRESSION=ON` to include in the library. |
 | **ENABLE_AOCL_DA**        | `-DENABLE_AOCL_DA=OFF` (default) or `-DENABLE_AOCL_DA=ON` to include in the library. |
 | **ENABLE_AOCL_LIBMEM**    | `-DENABLE_AOCL_LIBMEM=OFF` (default) or `-DENABLE_AOCL_LIBMEM=ON` to include in the library. |
+| **ENABLE_AOCL_FFTZ**      | `-DENABLE_AOCL_FFTZ=OFF` (default) or `-DENABLE_AOCL_FFTZ=ON` to include AOCL-FFTZ in the library. |
+| **ENABLE_AOCL_OPENRNG**   | `-DENABLE_AOCL_OPENRNG=OFF` (default) or `-DENABLE_AOCL_OPENRNG=ON` to include AOCL-OpenRNG in the library. Auto-enables AOCL-LibM, which AOCL-OpenRNG depends on. |
+| **ENABLE_AOCL_DLP**       | `-DENABLE_AOCL_DLP=OFF` (default) or `-DENABLE_AOCL_DLP=ON` to include AOCL-DLP in the library. AOCL-DLP is a dependency of AOCL-DA on non-Windows platforms and is auto-enabled with AOCL-DA there. |
+| **ENABLE_AOCL_SCALAPACK** | `-DENABLE_AOCL_SCALAPACK=OFF` (default) or `-DENABLE_AOCL_SCALAPACK=ON` to build AOCL-ScaLAPACK. By design it is **not merged** into the unified library: it is built as a separate library that links against `libaocl`, and it auto-enables AOCL-LAPACK (which pulls in AOCL-BLAS and AOCL-Utils). Requires MPI (`-DMPI_BASE_DIR`) and a Fortran compiler. See [Building AOCL-ScaLAPACK](#building-aocl-scalapack). |
 
 ### CMake Options for Library Configuration
 
@@ -702,6 +702,58 @@ The following table lists additional CMake variables used to configure how selec
 | CMake Variable or Option  | Usage |
 |---------------------------|---------------------------------------------------------------|
 | **ENABLE_AOCL_LAPACK_BLAS_COUPLING**      | `-DENABLE_AOCL_LAPACK_BLAS_COUPLING=OFF` (default) or `-DENABLE_AOCL_LAPACK_BLAS_COUPLING=ON` to enable tight coupling between AOCL-LAPACK and AOCL-BLAS library. This option controls whether AOCL-LAPACK should be tightly integrated with AOCL-BLAS implementation. **Note:** This is different from `ENABLE_AOCL_BLAS`, which controls whether to include AOCL-BLAS into the unified library. |
+
+### CMake Options for Debug and Trace Logging (DTL)
+
+The following table lists the CMake variables that control the AOCL Debug and
+Trace Logging (DTL) facility. DTL is disabled by default. For usage examples,
+see [Enabling Debug and Trace Logging (DTL)](#enabling-debug-and-trace-logging-dtl).
+
+| CMake Variable or Option  | Usage |
+|---------------------------|---------------------------------------------------------------|
+| **AOCL_DTL**              | `-DAOCL_DTL=off` (default) or `-DAOCL_DTL=on` to enable DTL logging globally. Only AOCL-BLAS and AOCL-LAPACK are wired for DTL; other components are unaffected. |
+| **AOCL_&lt;COMPONENT&gt;_DTL** | `-DAOCL_<COMPONENT>_DTL=inherit` (default -- follow `AOCL_DTL`), `on`, or `off` to override DTL for a single component. `<COMPONENT>` is `BLAS` or `LAPACK` (for example `-DAOCL_BLAS_DTL=on`). |
+
+### Passing Library-Specific CMake Options
+
+Because Build-It-Yourself compiles each selected library in-tree (via
+FetchContent + `add_subdirectory`), a library's own CMake options can be set
+directly on the top-level `cmake` command with `-D<OPTION>=<value>` -- the option
+is inherited by that library's build, with no separate per-library configure
+step. This is a key convenience of the target-based design. Library behaviour is
+controlled two ways:
+
+- **BIY-exposed options** map a common library setting onto a top-level option so
+  it is applied consistently across the merged library. For example:
+
+    - `-DENABLE_CBLAS=OFF` -- disable the AOCL-BLAS CBLAS interface.
+    - `-DENABLE_AMD_FLAGS=ON` -- enable the AMD-specific flags for the AOCL-LAPACK build.
+    - `-DENABLE_BLAS_EXT_GEMMT=OFF` -- toggle the AOCL-LAPACK external GEMMT path.
+
+- **Direct pass-through** of any other option a library defines. For example:
+
+    - `-DENABLE_AOCL_DYNAMIC=OFF` -- disable AOCL-BLAS dynamic thread selection.
+
+**Notes:**
+
+- A small set of options is **forced** by BIY to keep the merged library
+  self-consistent and cannot be overridden per library; use the corresponding
+  unified knob instead: linkage (`-DBUILD_SHARED_LIBS`), integer size
+  (`-DENABLE_ILP64`), threading (`-DENABLE_MULTITHREADING`), and architecture
+  (`-DAMD_CONFIG`).
+- Option names are **global** to a configure: a bare `-D<OPTION>` applies to
+  every enabled library that defines it (for example, `-DENABLE_ASAN=ON` affects
+  all libraries that read it).
+- For the complete set of options a library supports, refer to that library's
+  section in the AOCL Userguide.
+
+### CMake Options for Output Library Naming
+
+The following table lists the CMake variable used to set the name of the unified AOCL library.
+
+| CMake Variable or Option  | Usage |
+|---------------------------|---------------------------------------------------------------|
+| **AOCL_SINGLE_LIBRARY_NAME** | `-DAOCL_SINGLE_LIBRARY_NAME=<name>` sets the base name of the unified library (default `aocl`); this value is also used as the CMake project name. The produced binary is named after it: `<name>.dll` and `<name>.lib` on Windows, and `lib<name>.so` and `lib<name>.a` on Linux. |
 
 ### CMake Options for AMD Architecture-Specific Optimizations
 
@@ -753,34 +805,28 @@ $ cmake --preset aocl-linux-make-lp-ga-gcc-config -DAMD_CONFIG=amdzen --fresh
 
 ### CMake Options for Build Performance
 
-The following table lists the CMake variable used to control parallel build performance.
-
-| CMake Variable or Option  | Usage |
-|---------------------------|---------------------------------------------------------------|
-| **BUILD_CORES**           | `-DBUILD_CORES=<number>` to specify the number of CPU cores to use for parallel builds. If not specified (empty), automatically uses 50% of available cores to balance performance and memory usage. |
-
-**BUILD_CORES Usage:**
-
-- **Auto (Default)**: If `BUILD_CORES` is not specified or empty, the build system automatically detects available CPU cores and uses 50% of them for parallel compilation. This prevents memory exhaustion on systems with many cores.
-- **User-Specified**: Provide an exact number to use a specific core count (e.g., `-DBUILD_CORES=8`). The build system (make) will handle any invalid values appropriately.
-
-**Examples:**
+The unified AOCL build compiles every enabled component in-tree (via
+FetchContent + `add_subdirectory`), so build parallelism is controlled by the
+standard CMake build-tool options rather than a project-specific variable. Pass
+`-j` / `--parallel` (optionally with a core count) to `cmake --build`:
 
 ```bash
-# Use default (50% of available cores)
-$ cmake --preset aocl-linux-make-lp-ga-gcc-config --fresh
+# Use all available cores (best on machines with enough RAM per core)
+$ cmake --build build --config Release --target install -j
 
-# Use 8 cores for compilation
-$ cmake --preset aocl-linux-make-lp-ga-gcc-config -DBUILD_CORES=8 --fresh
-
-# Use all available cores (assumes 16 cores available)
-$ cmake --preset aocl-linux-make-lp-ga-gcc-config -DBUILD_CORES=16 --fresh
-
-# Use single core (for debugging or low-memory systems)
-$ cmake --preset aocl-linux-make-lp-ga-gcc-config -DBUILD_CORES=1 --fresh
+# Cap the job count on memory-constrained machines (see the note below)
+$ cmake --build build --config Release --target install -j <N>
 ```
 
-**Note:** This option is particularly useful on high-core-count systems where using all cores simultaneously may cause memory issues during compilation of large libraries.
+**Note:** Build parallelism is limited by *available memory*, not by core count.
+On high-core-count machines (for example, 96- or 128-core servers) with ample
+RAM, use all cores (`-j`) for the fastest build -- dropping to a small fixed
+number such as `-j 8` would leave most of the machine idle. The large
+translation units in AOCL-BLAS/LAPACK/DA only cause trouble when the number of
+concurrent jobs outpaces available RAM, so keep the job count at roughly
+`min(cores, free_GB / 2)`. See
+[Out-of-memory (OOM) during a fully parallel build](#out-of-memory-oom-during-a-fully-parallel-build)
+for a ready-to-use command that computes a memory-safe job count.
 
 
 ### CMake Options to Set Library Source Path
@@ -801,6 +847,10 @@ internet access.
 | **COMPRESSION_PATH**     | `-DCOMPRESSION_PATH=<Directory Path where AOCL-Compression is present>`. |
 | **DA_PATH**              | `-DDA_PATH=<Directory Path where AOCL-Data-Analytics is present>`. |
 | **LIBMEM_PATH**          | `-DLIBMEM_PATH=<Directory Path where AOCL-LibMem is present>`. |
+| **FFTZ_PATH**            | `-DFFTZ_PATH=<Directory Path where AOCL-FFTZ is present>`. |
+| **OPENRNG_PATH**         | `-DOPENRNG_PATH=<Directory Path where AOCL-OpenRNG is present>`. |
+| **DLP_PATH**             | `-DDLP_PATH=<Directory Path where AOCL-DLP is present>`. |
+| **SCALAPACK_PATH**       | `-DSCALAPACK_PATH=<Parent directory that contains the 'aocl-scalapack' source>`. Only used when `ENABLE_AOCL_SCALAPACK=ON`. |
 
 ### CMake Options to Set GIT Repository and Tag/Branch
 
@@ -832,3 +882,96 @@ the repository and branch/tag for the AOCL stable public release.
 | **DA_GIT_TAG**              | `main`                                             | `-DDA_GIT_TAG=<AOCL-Data-Analytics Git Tag or Branch Name>` |
 | **LIBMEM_GIT_REPOSITORY**   | <https://github.com/amd/aocl-libmem.git>           | `-DLIBMEM_GIT_REPOSITORY=<AOCL-LibMem Repository URL>` |
 | **LIBMEM_GIT_TAG**          | `main`                                             | `-DLIBMEM_GIT_TAG=<AOCL-LibMem Git Tag or Branch Name>` |
+| **FFTZ_GIT_REPOSITORY**     | <https://github.com/amd/aocl-fftz.git>             | `-DFFTZ_GIT_REPOSITORY=<AOCL-FFTZ Repository URL>` |
+| **FFTZ_GIT_TAG**            | `amd-main`                                         | `-DFFTZ_GIT_TAG=<AOCL-FFTZ Git Tag or Branch Name>` |
+| **OPENRNG_GIT_REPOSITORY**  | <https://github.com/amd/openrng.git>               | `-DOPENRNG_GIT_REPOSITORY=<AOCL-OpenRNG Repository URL>` |
+| **OPENRNG_GIT_TAG**         | `main`                                             | `-DOPENRNG_GIT_TAG=<AOCL-OpenRNG Git Tag or Branch Name>` |
+| **DLP_GIT_REPOSITORY**      | <https://github.com/amd/aocl-dlp.git>              | `-DDLP_GIT_REPOSITORY=<AOCL-DLP Repository URL>` |
+| **DLP_GIT_TAG**             | `master`                                           | `-DDLP_GIT_TAG=<AOCL-DLP Git Tag or Branch Name>` |
+| **SCALAPACK_GIT_REPOSITORY**| <https://github.com/amd/aocl-scalapack.git>        | `-DSCALAPACK_GIT_REPOSITORY=<AOCL-ScaLAPACK Repository URL>` (only when `ENABLE_AOCL_SCALAPACK=ON`) |
+| **SCALAPACK_GIT_TAG**       | `master`                                           | `-DSCALAPACK_GIT_TAG=<AOCL-ScaLAPACK Git Tag or Branch Name>` |
+
+## Build Troubleshooting
+
+### Out-of-memory (OOM) during a fully parallel build
+
+Building with unbounded parallelism -- `cmake --build build -j` (with no job
+count) or `make -j` -- starts one compile job per available CPU core. Some AOCL
+components (notably AOCL-BLAS/BLIS, AOCL-LAPACK/libflame, and
+AOCL-Data-Analytics) contain large translation units with high peak compiler
+memory, so on machines with many cores relative to RAM the build can exhaust
+memory and fail with an out-of-memory (OOM) error -- for example, the compiler
+is "Killed" (signal 9) or the Linux OOM killer terminates `cc1plus` / `clang`.
+
+**Workaround:** the limiting resource is **memory, not cores** -- so rather than
+dropping to a small fixed number like `-j 8` (which would badly under-utilize a
+96- or 128-core server), size the job count to the machine and cap it only when
+RAM is the bottleneck. A practical rule of thumb is:
+
+```text
+jobs = min(number_of_cores, free_RAM_GB / 2)
+```
+
+That is, allow roughly one compile job per ~2 GB of available RAM, but never more
+than the core count. For example:
+
+| Machine | Memory allows (~free_GB / 2) | Recommended jobs |
+| --- | --- | --- |
+| 128 cores / 512 GB RAM | ~256 | `-j` (all 128 cores) |
+| 96 cores / 128 GB RAM  | ~64  | `-j 64` |
+| 64 cores / 64 GB RAM   | ~32  | `-j 32` |
+| 32 cores / 32 GB RAM   | ~16  | `-j 16` |
+
+On Linux you can compute and apply a memory-safe job count automatically:
+
+```bash
+cores=$(nproc)
+memgb=$(awk '/MemAvailable/{printf "%d", $2/1048576}' /proc/meminfo)
+jobs=$(( memgb/2 < cores ? memgb/2 : cores )); (( jobs < 1 )) && jobs=1
+echo "Building with -j $jobs (cores=$cores, MemAvailable=${memgb} GB)"
+cmake --build build --config Release --target install -j "$jobs"
+```
+
+Only lower the count further (for example `-j 4`, `-j 2`, or `-j 1` in the worst
+case) if the build still hits OOM under heavy memory pressure. See also
+[CMake Options for Build Performance](#cmake-options-for-build-performance).
+
+### Visual Studio build fails with MSB8013 (`Debug|x64` not found)
+
+On the Visual Studio (multi-config) generator the project configures only the
+`Release` configuration. If the build is invoked without selecting it --
+`cmake --build build` with no `--config` -- MSBuild falls back to its own
+default, `Debug`, which does not exist, and fails:
+
+```text
+error MSB8013: This project doesn't contain the Configuration and Platform combination of Debug|x64.
+```
+
+**Workaround:** pass `--config Release` when building with the Visual Studio
+generator (the provided presets and the documented build commands already do
+this):
+
+```bat
+cmake --build build --config Release
+```
+
+**Building Debug binaries:** the project defaults to `Release` and mirrors the
+available configuration(s) to `CMAKE_BUILD_TYPE`. To build Debug, set
+`-DCMAKE_BUILD_TYPE=Debug` at configure time.
+
+- Single-config generators (Ninja, Unix Makefiles):
+
+  ```bash
+  cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+  cmake --build build
+  ```
+
+- Multi-config generators (Visual Studio): the `Debug` configuration then
+  becomes available, so build it with `--config Debug`:
+
+  ```bat
+  cmake -S . -B build -G "Visual Studio 17 2022" -T ClangCl -DCMAKE_BUILD_TYPE=Debug
+  cmake --build build --config Debug
+  ```
+
+
