@@ -459,17 +459,19 @@ DTL is controlled at **configure time** with two knobs:
   $ cmake --preset aocl-win-msvc-lp-ga-config -DAOCL_DTL=on --fresh
   ```
 
-  `-DAOCL_DTL` accepts `off` (default) or `on`.
+  `-DAOCL_DTL` accepts `off` (default), `on`/`all` (both the API trace and the
+  input log), `trace` (trace stream only) or `log` (input logging only).
 
-- **Per-component override** -- enable or disable DTL for a single component,
-  independent of the global default, with `-DAOCL_<COMPONENT>_DTL=<value>` where
-  `<value>` is `inherit` (default -- follow `AOCL_DTL`), `ON`, or `OFF`.
-  `<COMPONENT>` is `BLAS` or `LAPACK`. For example, to keep DTL off globally but
-  turn it on only for AOCL-BLAS and AOCL-LAPACK:
+- **Per-component override** -- enable, disable or pick a DTL sub-mode for a
+  single component, independent of the global default, with
+  `-DAOCL_<COMPONENT>_DTL=<value>` where `<value>` is `inherit` (default --
+  follow `AOCL_DTL`), `off`, `on`/`all`, `trace` or `log`. `<COMPONENT>` is
+  `BLAS` or `LAPACK`. For example, to keep DTL off globally but capture only the
+  input log for AOCL-LAPACK and full trace+log for AOCL-BLAS:
 
   ``` bash
   $ cmake --preset aocl-linux-make-lp-ga-gcc-config \
-      -DAOCL_BLAS_DTL=on -DAOCL_LAPACK_DTL=on --fresh
+      -DAOCL_BLAS_DTL=all -DAOCL_LAPACK_DTL=log --fresh
   ```
 
 See also
@@ -711,8 +713,8 @@ see [Enabling Debug and Trace Logging (DTL)](#enabling-debug-and-trace-logging-d
 
 | CMake Variable or Option  | Usage |
 |---------------------------|---------------------------------------------------------------|
-| **AOCL_DTL**              | `-DAOCL_DTL=off` (default) or `-DAOCL_DTL=on` to enable DTL logging globally. Only AOCL-BLAS and AOCL-LAPACK are wired for DTL; other components are unaffected. |
-| **AOCL_&lt;COMPONENT&gt;_DTL** | `-DAOCL_<COMPONENT>_DTL=inherit` (default -- follow `AOCL_DTL`), `on`, or `off` to override DTL for a single component. `<COMPONENT>` is `BLAS` or `LAPACK` (for example `-DAOCL_BLAS_DTL=on`). |
+| **AOCL_DTL**              | `-DAOCL_DTL=off` (default) enables no logging. `on` or `all` enable both the API trace and the input log; `trace` enables only the trace stream; `log` enables only input logging. Only AOCL-BLAS and AOCL-LAPACK are wired for DTL; other components are unaffected. |
+| **AOCL_&lt;COMPONENT&gt;_DTL** | `-DAOCL_<COMPONENT>_DTL=inherit` (default -- follow `AOCL_DTL`), `off`, `on`/`all`, `trace`, or `log` to override the DTL mode for a single component. `<COMPONENT>` is `BLAS` or `LAPACK` (for example `-DAOCL_BLAS_DTL=trace`). |
 
 ### Passing Library-Specific CMake Options
 
@@ -761,14 +763,14 @@ The following table lists the CMake variable used to enable ISA-specific optimiz
 
 | CMake Variable or Option  | Usage |
 |---------------------------|---------------------------------------------------------------|
-| **AMD_CONFIG**            | `-DAMD_CONFIG=<value>` to enable architecture-specific optimizations. Supported values: `zen`, `zen2`, `zen3`, `zen4`, `zen5`, `amdzen`. If not specified (empty), defaults to `amdzen` for generic AMD builds. |
+| **AMD_CONFIG**            | `-DAMD_CONFIG=<value>` to enable architecture-specific optimizations. Supported values: `zen`, `zen2`, `zen3`, `zen4`, `zen5`, `zen6`, `amdzen`. If not specified (empty), defaults to `amdzen` for generic AMD builds. |
 
 **AMD_CONFIG Impact on Libraries:**
 
 - **AOCL-BLAS (BLIS)**: Maps directly to `BLIS_CONFIG_FAMILY` configuration.
 - **AOCL-LAPACK (LibFlame)**: 
   - `zen`, `zen2`, `zen3` → AVX2-STRICT optimizations
-  - `zen4`, `zen5` → AVX512-STRICT optimizations
+  - `zen4`, `zen5`, `zen6` → AVX512-STRICT optimizations
   - Default: AVX2
 - **AOCL-LibM**: 
   - `zen` → Static dispatch with AVX2
@@ -776,21 +778,36 @@ The following table lists the CMake variable used to enable ISA-specific optimiz
   - `zen3` → Static dispatch with ZEN3
   - `zen4` → Static dispatch with ZEN4
   - `zen5` → Static dispatch with ZEN5
+  - `zen6` → Static dispatch with ZEN6
   - Default: Dynamic dispatch (runtime detection)
 - **AOCL-DA**:
     - `zen`, `zen2` → `znver2`
     - `zen3` → `znver3`
     - `zen4` → `znver4`
     - `zen5` → `znver5`
+    - `zen6` → `znver6`
     - `amdzen` → `dynamic`
     - Default: `dynamic`
 - **AOCL-Sparse**:
     - `zen`, `zen2`, `zen3` → `OFF` (AVX512 code paths disabled at build time)
-    - `zen4`, `zen5`, `amdzen` → `ON` (AVX512 code paths enabled at build time)
+    - `zen4`, `zen5`, `zen6`, `amdzen` → `ON` (AVX512 code paths enabled at build time)
     - Default: `ON`
     - Runtime dispatch remains automatic and can be guided using `AOCL_ENABLE_INSTRUCTIONS`
+- **AOCL-Compression** (`AOCL_MAX_ISA_LEVEL`, UNIX only — ignored on Windows):
+    - `zen`, `zen2`, `zen3` → `AVX2`
+    - `zen4`, `zen5`, `zen6`, `amdzen` → `AVX512`
+    - Default: `AVX512`
+- **AOCL-FFTZ** (`ENABLE_INSTRUCTIONS_UPTO`):
+    - `zen`, `zen2`, `zen3` → `AVX256`
+    - `zen4`, `zen5`, `zen6`, `amdzen` → `AVX512`
+    - Default: `AVX512`
+- **AOCL-LibMem** (`ALMEM_ARCH`, UNIX/x86 only):
+    - `zen` → `zen1`; `zen2`…`zen6` → `zen2`…`zen6` (forces that micro-architecture and disables LibMem's own dynamic dispatch)
+    - `amdzen` / unset → auto-detect (dynamic dispatch)
 
-**Examples:**
+**Note:** AOCL-Utils, AOCL-Crypto, OpenRNG, AOCL-DLP and AOCL-ScaLAPACK do not
+expose a compile-time architecture switch (they auto-detect / dispatch at
+runtime), so `AMD_CONFIG` does not change how they are built.
 
 ```bash
 # Build with Zen 4 optimizations (AVX512 for LAPACK and LibM)

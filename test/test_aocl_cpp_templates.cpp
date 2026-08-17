@@ -7,17 +7,23 @@
 //   * aoclsparse.hpp  -> namespace aoclsparse { template<T> trsv/mv(...) }
 //   * aoclda.hpp      -> template<T> da_handle_init/da_options_set(...)
 // Calling these forces the compiler to emit references to the C++ *template*
-// instantiation symbols, so the LINKER must find them in the (possibly renamed)
-// AOCL library. If the rename tool mangled those template symbols incorrectly,
-// or renamed the C++ namespace in the header but not the binary (or vice versa),
-// this test FAILS TO LINK -- guarding the C++ template-symbol rename for the
-// DA and sparse templated interfaces.
+// instantiation symbols, so the LINKER must resolve them against the unified
+// AOCL library. If a template instantiation or the C++ namespace is missing (or
+// named differently in the header vs the binary), this test FAILS TO LINK --
+// guarding the DA and sparse templated interfaces.
+//
+// PFX/NSPFX default to identity and can be overridden by the build system (e.g.
+// to test a symbol/namespace-prefixed library) without touching the call sites.
 
 #include <cstdio>
 #include <complex>
 
+#ifndef PFX
 #define PFX(name) name
+#endif
+#ifndef NSPFX
 #define NSPFX(name) name
+#endif
 
 #ifdef ENABLE_SPARSE
 #include "aoclsparse.hpp"

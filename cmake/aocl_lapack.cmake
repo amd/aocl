@@ -55,11 +55,8 @@ if(ENABLE_AOCL_LAPACK)
     else()
         set(_lapack_mt OFF)
     endif()
-    if(AOCL_LAPACK_DTL_ON)
-        set(_lapack_dtl "ALL")
-    else()
-        set(_lapack_dtl "OFF")
-    endif()
+    # DTL mode resolved to libflame's ENABLE_AOCL_DTL value (ALL/TRACE/LOG/OFF).
+    set(_lapack_dtl "${AOCL_LAPACK_DTL_MODE}")
 
     # Windows: libflame derives its own output name from the BLAS library name
     # (LibBlis -> LibFlame). Supply the in-tree BLIS static target's real name.

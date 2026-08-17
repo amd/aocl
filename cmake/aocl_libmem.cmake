@@ -41,6 +41,10 @@ if(ENABLE_AOCL_LIBMEM)
         set(BUILD_SHARED_LIBS OFF)
         set(ALMEM_DYN_DISPATCH    ON CACHE BOOL "" FORCE)
         set(AOCL_LIBMEM_SUBPROJECT ON CACHE BOOL "" FORCE)
+        # Forcing a specific uarch makes LibMem disable its own dynamic dispatch.
+        if(LIBMEM_ARCH_CONFIG)
+            set(ALMEM_ARCH "${LIBMEM_ARCH_CONFIG}" CACHE STRING "" FORCE)
+        endif()
 
         aocl_tb_declare_source(aocl_libmem LIBMEM aocl-libmem)
         FetchContent_MakeAvailable(aocl_libmem)

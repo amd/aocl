@@ -45,6 +45,8 @@ if(ENABLE_AOCL_FFTZ)
         set(BUILD_SHARED_LIBS OFF)
         set(BUILD_STATIC_LIBS          ON         CACHE BOOL "" FORCE)
         set(ENABLE_MULTI_THREADING     ${_fftz_mt} CACHE BOOL "" FORCE)
+        # AMD_CONFIG-derived max AVX instruction set for FFTZ kernels.
+        set(ENABLE_INSTRUCTIONS_UPTO   "${FFTZ_ISA_CONFIG}" CACHE STRING "" FORCE)
         set(AOCL_TEST_COVERAGE         OFF        CACHE BOOL "" FORCE)
         set(BUILD_DOC                  OFF        CACHE BOOL "" FORCE)
         set(BUILD_THIRD_PARTY_WRAPPERS OFF        CACHE BOOL "" FORCE)

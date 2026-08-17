@@ -57,11 +57,8 @@ if(ENABLE_AOCL_BLAS)
         set(_blas_threading "no")
         set(_blas_soname    "blis")
     endif()
-    if(AOCL_BLAS_DTL_ON)
-        set(_blas_dtl "ALL")
-    else()
-        set(_blas_dtl "OFF")
-    endif()
+    # DTL mode resolved to BLIS's ENABLE_AOCL_DTL value (ALL/TRACE/LOG/OFF).
+    set(_blas_dtl "${AOCL_BLAS_DTL_MODE}")
 
     # Bring BLIS into this build in an isolated option scope.
     block()

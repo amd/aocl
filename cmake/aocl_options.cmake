@@ -55,17 +55,18 @@ set_property(CACHE AOCL_MT_RUNTIME PROPERTY STRINGS auto serial pthread openmp g
 set(AOCL_INT_SIZE "auto" CACHE STRING "Integer size: auto|lp64|ilp64")
 set_property(CACHE AOCL_INT_SIZE PROPERTY STRINGS auto lp64 ilp64)
 
-set(AOCL_ARCH "auto" CACHE STRING "Target architecture: auto|zen2|zen3|zen4|zen5|amdzen|native")
-set_property(CACHE AOCL_ARCH PROPERTY STRINGS auto zen2 zen3 zen4 zen5 amdzen native)
+set(AOCL_ARCH "auto" CACHE STRING "Target architecture: auto|zen2|zen3|zen4|zen5|zen6|amdzen|native")
+set_property(CACHE AOCL_ARCH PROPERTY STRINGS auto zen2 zen3 zen4 zen5 zen6 amdzen native)
 
-set(AOCL_DTL "off" CACHE STRING "Global DTL (debug/trace logging) default: off|on")
-set_property(CACHE AOCL_DTL PROPERTY STRINGS off on)
+# DTL logging mode (AOCL-BLAS/LAPACK): off|on|all(trace+log)|trace|log.
+set(AOCL_DTL "off" CACHE STRING "Global DTL (debug/trace logging) default: off|on|all|trace|log")
+set_property(CACHE AOCL_DTL PROPERTY STRINGS off on all trace log)
 
 _aocl_validate_enum(AOCL_LINKAGE    auto shared static)
 _aocl_validate_enum(AOCL_MT_RUNTIME auto serial pthread openmp gomp libomp iomp)
 _aocl_validate_enum(AOCL_INT_SIZE   auto lp64 ilp64)
-_aocl_validate_enum(AOCL_ARCH       auto zen2 zen3 zen4 zen5 amdzen native)
-_aocl_validate_enum(AOCL_DTL        off on)
+_aocl_validate_enum(AOCL_ARCH       auto zen2 zen3 zen4 zen5 zen6 amdzen native)
+_aocl_validate_enum(AOCL_DTL        off on all trace log)
 
 # ---------------------------------------------------------------------------
 # Bridge: explicit new option DRIVES the legacy variable; "auto" leaves the
@@ -174,11 +175,11 @@ foreach(_C IN LISTS AOCL_COMPONENTS)
     set_property(CACHE AOCL_${_C}_THREADING PROPERTY STRINGS inherit mt st)
 
     set(AOCL_${_C}_DTL "inherit" CACHE STRING
-        "DTL logging for ${_C}: inherit|on|off")
-    set_property(CACHE AOCL_${_C}_DTL PROPERTY STRINGS inherit on off)
+        "DTL logging for ${_C}: inherit|off|on|all|trace|log")
+    set_property(CACHE AOCL_${_C}_DTL PROPERTY STRINGS inherit off on all trace log)
 
     _aocl_validate_enum(AOCL_${_C}_THREADING inherit mt st)
-    _aocl_validate_enum(AOCL_${_C}_DTL       inherit on off)
+    _aocl_validate_enum(AOCL_${_C}_DTL       inherit off on all trace log)
 
     # A component cannot be MT when there is no global threading runtime.
     if(AOCL_${_C}_THREADING STREQUAL "mt" AND NOT AOCL_MT_GLOBAL)
@@ -208,7 +209,7 @@ function(aocl_opt_threading COMP outvar)
     set(${outvar} "${_r}" PARENT_SCOPE)
 endfunction()
 
-# Effective DTL for a component -> "on" or "off".
+# Effective DTL mode for a component (override wins over global AOCL_DTL).
 function(aocl_opt_dtl COMP outvar)
     string(TOUPPER "${COMP}" _c)
     set(_v "${AOCL_${_c}_DTL}")
@@ -220,28 +221,47 @@ function(aocl_opt_dtl COMP outvar)
     set(${outvar} "${_r}" PARENT_SCOPE)
 endfunction()
 
+# Map a DTL mode to the ENABLE_AOCL_DTL value BLIS/libflame accept; on/all -> ALL.
+function(aocl_opt_dtl_enable_value MODE outvar)
+    string(TOLOWER "${MODE}" _m)
+    if(_m STREQUAL "off")
+        set(_r "OFF")
+    elseif(_m STREQUAL "trace")
+        set(_r "TRACE")
+    elseif(_m STREQUAL "log")
+        set(_r "LOG")
+    else()   # on, all
+        set(_r "ALL")
+    endif()
+    set(${outvar} "${_r}" PARENT_SCOPE)
+endfunction()
+
 # Convenience: resolve a component's threading + DTL into ON/OFF booleans in the
 # CALLER's scope (macro, so no PARENT_SCOPE needed). After calling
 # aocl_resolve_component(BLAS) the caller can read:
 #   AOCL_BLAS_THREADS_ON  -> ON when the component should build multithreaded
 #   AOCL_BLAS_DTL_ON      -> ON when DTL logging should be enabled
+#   AOCL_BLAS_DTL_MODE    -> canonical ENABLE_AOCL_DTL value: OFF|ALL|TRACE|LOG
 # For a component left at "inherit" these mirror the global resolved values, so
 # the legacy behaviour is preserved exactly.
 macro(aocl_resolve_component COMP)
     string(TOUPPER "${COMP}" _AOCL_RC)
     aocl_opt_threading(${_AOCL_RC} _AOCL_RC_THR)
     aocl_opt_dtl(${_AOCL_RC} _AOCL_RC_DTL)
+    aocl_opt_dtl_enable_value("${_AOCL_RC_DTL}" _AOCL_RC_DTL_VAL)
     if(_AOCL_RC_THR STREQUAL "mt")
         set(AOCL_${_AOCL_RC}_THREADS_ON ON)
     else()
         set(AOCL_${_AOCL_RC}_THREADS_ON OFF)
     endif()
-    if(_AOCL_RC_DTL STREQUAL "on")
-        set(AOCL_${_AOCL_RC}_DTL_ON ON)
-    else()
+    # Canonical ENABLE_AOCL_DTL value (OFF/ALL/TRACE/LOG) + a boolean shortcut.
+    set(AOCL_${_AOCL_RC}_DTL_MODE "${_AOCL_RC_DTL_VAL}")
+    if(AOCL_${_AOCL_RC}_DTL_MODE STREQUAL "OFF")
         set(AOCL_${_AOCL_RC}_DTL_ON OFF)
+    else()
+        set(AOCL_${_AOCL_RC}_DTL_ON ON)
     endif()
-    message(STATUS "[aocl-options] ${_AOCL_RC}: threads=${AOCL_${_AOCL_RC}_THREADS_ON} dtl=${AOCL_${_AOCL_RC}_DTL_ON}")
+    message(STATUS "[aocl-options] ${_AOCL_RC}: threads=${AOCL_${_AOCL_RC}_THREADS_ON} dtl=${AOCL_${_AOCL_RC}_DTL_MODE}")
 endmacro()
 
 # ---------------------------------------------------------------------------

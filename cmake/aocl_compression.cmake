@@ -48,6 +48,8 @@ if(ENABLE_AOCL_COMPRESSION)
         # ON (BUILD_SHARED_LIBS OFF keeps the rest of the stack consistent / /MT).
         set(BUILD_SHARED_LIBS OFF)
         set(BUILD_STATIC_LIBS         ON             CACHE BOOL "" FORCE)
+        # AMD_CONFIG-derived max ISA level (UNIX only; Windows ignores it).
+        set(AOCL_MAX_ISA_LEVEL        "${COMPRESSION_ISA_CONFIG}" CACHE STRING "" FORCE)
         set(AOCL_ENABLE_THREADS       ${_comp_threads} CACHE BOOL "" FORCE)
         set(AOCL_TEST_COVERAGE        OFF            CACHE BOOL "" FORCE)
         set(TEST_COVERAGE_THIRD_PARTY OFF            CACHE BOOL "" FORCE)
