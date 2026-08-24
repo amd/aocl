@@ -35,6 +35,25 @@
 #define PREFIX_LOWER(name) CONCAT(SYMBOL_PREFIX_TOKEN_LOWER, name)
 
 #ifdef USE_RENAMED_SYMBOLS
+// AOCL library TYPE / ENUM-CONSTANT names the header rewrite prefixes to
+// <prefix><name>. Types the rename engines leave unchanged (alc_cipher_handle_p,
+// Uint8/Uint64, au_cpu_num_t, AU_CURRENT_CPU_NUM) are intentionally kept bare.
+#ifdef ENABLE_CRYPTO
+#define alc_error_t                PREFIX_LOWER(alc_error_t)
+#define alc_cipher_mode_t          PREFIX_LOWER(alc_cipher_mode_t)
+#define ALC_AES_MODE_CFB           PREFIX_LOWER(ALC_AES_MODE_CFB)
+#define ALC_KEY_LEN_128            PREFIX_LOWER(ALC_KEY_LEN_128)
+#endif
+#ifdef ENABLE_DA
+#define da_handle                  PREFIX_LOWER(da_handle)
+#define da_status                  PREFIX_LOWER(da_status)
+#define da_int                     PREFIX_LOWER(da_int)
+#define da_status_success          PREFIX_LOWER(da_status_success)
+#define da_handle_interpolation    PREFIX_LOWER(da_handle_interpolation)
+#define column_major               PREFIX_LOWER(column_major)
+#define da_axis_col                PREFIX_LOWER(da_axis_col)
+#define interpolation_cubic_spline PREFIX_LOWER(interpolation_cubic_spline)
+#endif
 #ifdef ENABLE_CRYPTO
 #define ALCP_CIPHER_CONTEXT_SIZE PREFIX_LOWER(alcp_cipher_context_size)
 #define ALCP_CIPHER_REQUEST PREFIX_LOWER(alcp_cipher_request)

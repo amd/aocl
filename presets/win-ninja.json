@@ -17,7 +17,11 @@
               "CMAKE_BUILD_TYPE": "Release",
               "CMAKE_C_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
               "CMAKE_CXX_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
-              "OpenMP_libomp_LIBRARY": "$env{oneAPI_ROOT}/compiler/latest/lib/libiomp5md.lib"
+              "OpenMP_libomp_LIBRARY": "$env{oneAPI_ROOT}/compiler/latest/lib/libiomp5md.lib",
+              "CMAKE_Fortran_COMPILER": {
+                "type": "FILEPATH",
+                "value": "$env{oneAPI_ROOT}/compiler/latest/bin/ifx.exe"
+              }
             },
             "generator": "Ninja",
             "condition": {
@@ -28,7 +32,7 @@
           },
           {
             "name": "aocl-win-ninja-mt-ilp-nopreinv-nogemmt-config",
-            "inherits": ["win-ninja", "mt", "ilp64", "shared", "complex-return-intel", "disable_trsm_preinversion", "enable_amd_flags", "disable_blas_ext_gemmt"],
+            "inherits": ["win-ninja", "mt", "ilp64", "shared", "complex-return-intel", "disable_trsm_preinversion", "enable_amd_flags", "disable_blas_ext_gemmt", "enable_aocl_blas"],
             "cacheVariables": {
                 "ENABLE_AOCL_UTILS": "ON",
                 "ENABLE_AOCL_BLAS": "ON",
@@ -82,9 +86,11 @@
                 "ENABLE_AOCL_COMPRESSION": "ON",
                 "ENABLE_AOCL_CRYPTO": "ON",
                 "ENABLE_AOCL_DA": "ON",
+                "ENABLE_AOCL_DLP": "ON",
                 "ENABLE_AOCL_OPENRNG": "ON",
+                "ENABLE_AOCL_FFTZ": "ON",
                 "OPENSSL_INSTALL_DIR": "$env{OPENSSL_INSTALL_DIR}",
-                "ENABLE_ADDON": "aocl_gemm"
+                "ENABLE_ADDON": ""
             },
             "hidden": false
           },
@@ -100,9 +106,11 @@
                 "ENABLE_AOCL_COMPRESSION": "ON",
                 "ENABLE_AOCL_CRYPTO": "ON",
                 "ENABLE_AOCL_DA": "ON",
+                "ENABLE_AOCL_DLP": "ON",
                 "ENABLE_AOCL_OPENRNG": "ON",
+                "ENABLE_AOCL_FFTZ": "ON",
                 "OPENSSL_INSTALL_DIR": "$env{OPENSSL_INSTALL_DIR}",
-                "ENABLE_ADDON": "aocl_gemm"
+                "ENABLE_ADDON": ""
             },
             "hidden": false
           }

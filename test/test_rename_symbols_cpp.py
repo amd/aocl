@@ -8,9 +8,9 @@ import unittest
 
 
 _THIS_DIR = os.path.dirname(__file__)
-_RENAME_SCRIPT = os.path.abspath(os.path.join(_THIS_DIR, '..', 'rename_symbols.py'))
+_RENAME_SCRIPT = os.path.abspath(os.path.join(_THIS_DIR, '..', 'symbol_rename', 'rename_engine_linux.py'))
 
-spec = importlib.util.spec_from_file_location('rename_symbols', _RENAME_SCRIPT)
+spec = importlib.util.spec_from_file_location('rename_engine_linux', _RENAME_SCRIPT)
 rename_symbols = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rename_symbols)
 

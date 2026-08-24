@@ -1,5 +1,7 @@
+# Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved.
+
 # AOCL Symbol Renaming - Build and Test Commands
-# Updated: December 10, 2025
+# Updated: 2026-07-24
 
 # ============================================================================
 # IMPORTANT: PLACEHOLDER DEFINITIONS
@@ -25,8 +27,11 @@ rm -rf build install_package
 export OPENSSL_INSTALL_DIR=$HOME/openssl
 
 # Step 3: Configure with symbol renaming
+# Note: symbol renaming is incompatible with AOCL-LibMem, which the GA presets
+# enable by default; disable it or the configure step aborts.
 cmake --preset aocl-linux-make-lp-ga-gcc-config \
   -DENABLE_TESTS=ON \
+  -DENABLE_AOCL_LIBMEM=OFF \
   -DSYMBOL_RENAME_PREFIX=AOCL_
 
 # Step 4: Build and Install libraries (triggers automatic symbol renaming)
@@ -78,9 +83,10 @@ cd "$AOCL_DIR"
 rm -rf build install_package
 export OPENSSL_INSTALL_DIR=$HOME/openssl
 
-# Configure with symbol renaming
+# Configure with symbol renaming (disable LibMem: incompatible with renaming)
 cmake --preset aocl-linux-make-lp-ga-gcc-config \
   -DENABLE_TESTS=ON \
+  -DENABLE_AOCL_LIBMEM=OFF \
   -DSYMBOL_RENAME_PREFIX=AOCL_
 
 cd build
@@ -109,16 +115,19 @@ echo "✅ Build and tests completed successfully!"
 # Example: AOCL51_ prefix
 cmake --preset aocl-linux-make-lp-ga-gcc-config \
   -DENABLE_TESTS=ON \
+  -DENABLE_AOCL_LIBMEM=OFF \
   -DSYMBOL_RENAME_PREFIX=AOCL51_
 
 # Example: AOCL52_ prefix
 cmake --preset aocl-linux-make-lp-ga-gcc-config \
   -DENABLE_TESTS=ON \
+  -DENABLE_AOCL_LIBMEM=OFF \
   -DSYMBOL_RENAME_PREFIX=AOCL52_
 
 # Example: Custom prefix
 cmake --preset aocl-linux-make-lp-ga-gcc-config \
   -DENABLE_TESTS=ON \
+  -DENABLE_AOCL_LIBMEM=OFF \
   -DSYMBOL_RENAME_PREFIX=MYLIB_
 
 # ============================================================================
@@ -129,6 +138,12 @@ cmake --preset aocl-linux-make-lp-ga-gcc-config \
 # - UPPERCASE Fortran symbols (DGEMM_) → UPPERCASE prefix (AOCL_DGEMM_)
 # - lowercase C symbols (cblas_dgemm) → lowercase prefix (aocl_cblas_dgemm)
 # - Test macros handle case conversion automatically
+
+# LibMem Incompatibility
+# - Symbol renaming cannot be combined with AOCL-LibMem (its IFUNC resolvers
+#   must keep standard libc names like memcpy/memset); enabling both makes the
+#   configure step fail. The GA presets enable LibMem, so pass
+#   -DENABLE_AOCL_LIBMEM=OFF whenever you set -DSYMBOL_RENAME_PREFIX.
 
 # Conditional Test Building
 # - If SYMBOL_RENAME_PREFIX is set: Builds both test executables
@@ -173,16 +188,16 @@ ls -lh build/test/test_*
 # TROUBLESHOOTING
 # ============================================================================
 
-# Issue: "No rule to make target 'test_renamed_symbols'"
+# Symptom: "No rule to make target 'test_renamed_symbols'"
 # Solution: Add -DSYMBOL_RENAME_PREFIX=AOCL_ to your CMake configuration
 
-# Issue: Symbol renaming not happening
+# Symptom: Symbol renaming not happening
 # Solution: Ensure SYMBOL_RENAME_PREFIX is set and not empty
 
-# Issue: Test linking errors
+# Symptom: Test linking errors
 # Solution: Verify libraries are installed before building tests
 
-# Issue: Runtime library not found
+# Symptom: Runtime library not found
 # Solution: Check LD_LIBRARY_PATH or use test executables with RPATH
 
 # ============================================================================
@@ -204,6 +219,7 @@ test_with_prefix() {
     
     cmake --preset aocl-linux-make-lp-ga-gcc-config \
       -DENABLE_TESTS=ON \
+      -DENABLE_AOCL_LIBMEM=OFF \
       -DSYMBOL_RENAME_PREFIX=$PREFIX
     
     cd build
