@@ -244,7 +244,7 @@ submodules). See
 for the full clone commands and for fetching only selected library sources.
 
 ``` console
-$ git clone --recurse-submodules https://github.com/AMD-AOCL/aocl.git -b submodules
+$ git clone --recurse-submodules https://github.com/amd/aocl.git -b submodules
 $ cd aocl
 ```
 
