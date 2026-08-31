@@ -441,13 +441,14 @@ when enabled at build time, emits API trace and/or input-log files at runtime
 **off by default** so production builds carry no logging overhead; enable it only
 when you need to capture the call flow or inputs for debugging.
 
-DTL is currently wired for **AOCL-BLAS** and **AOCL-LAPACK** only; enabling it
-has no effect on the other components.
+DTL trace/log **modes** are consumed by **AOCL-BLAS** and **AOCL-LAPACK**;
+**AOCL-Crypto** additionally honours the resolved on/off state to toggle its own
+debug logging (`ALCP_ENABLE_DEBUG_LOGGING`). The remaining components ignore DTL.
 
 DTL is controlled at **configure time** with two knobs:
 
-- **Global switch** -- turn DTL on for the DTL-capable components (AOCL-BLAS and
-  AOCL-LAPACK) at once:
+- **Global switch** -- turn DTL on for the DTL-capable components (AOCL-BLAS,
+  AOCL-LAPACK, and AOCL-Crypto's debug logging) at once:
 
   ``` bash
   # Linux
@@ -714,8 +715,8 @@ see [Enabling Debug and Trace Logging (DTL)](#enabling-debug-and-trace-logging-d
 
 | CMake Variable or Option  | Usage |
 |---------------------------|---------------------------------------------------------------|
-| **ENABLE_AOCL_DTL**              | `-DENABLE_AOCL_DTL=off` (default) enables no logging. `on` or `all` enable both the API trace and the input log; `trace` enables only the trace stream; `log` enables only input logging. Values are case-insensitive (`ALL`, `Trace`, `off`, ...). Only AOCL-BLAS and AOCL-LAPACK are wired for DTL; other components are unaffected. |
-| **ENABLE_AOCL_&lt;COMPONENT&gt;_DTL** | `-DENABLE_AOCL_<COMPONENT>_DTL=inherit` (default -- follow `ENABLE_AOCL_DTL`), `off`, `on`/`all`, `trace`, or `log` to override the DTL mode for a single component. Values are case-insensitive. `<COMPONENT>` is `BLAS` or `LAPACK` (for example `-DENABLE_AOCL_BLAS_DTL=trace`). |
+| **ENABLE_AOCL_DTL**              | `-DENABLE_AOCL_DTL=off` (default) enables no logging. `on` or `all` enable both the API trace and the input log; `trace` enables only the trace stream; `log` enables only input logging. Values are case-insensitive (`ALL`, `Trace`, `off`, ...). AOCL-BLAS and AOCL-LAPACK consume the full modes; AOCL-Crypto uses the resolved on/off state for its debug logging (`ALCP_ENABLE_DEBUG_LOGGING`). Other components ignore DTL. |
+| **ENABLE_AOCL_&lt;COMPONENT&gt;_DTL** | `-DENABLE_AOCL_<COMPONENT>_DTL=inherit` (default -- follow `ENABLE_AOCL_DTL`), `off`, `on`/`all`, `trace`, or `log` to override the DTL mode for a single component. Values are case-insensitive. `<COMPONENT>` is `BLAS`, `LAPACK`, or `CRYPTO` (Crypto honours only the on/off state; for example `-DENABLE_AOCL_BLAS_DTL=trace`). |
 
 ### Passing Library-Specific CMake Options
 
