@@ -149,7 +149,9 @@ elseif(WIN32)
             set(FORTRAN_LIB_DIR "C:/Program Files (x86)/Intel/oneAPI/compiler/latest/lib")
         endif()
     endif()
-    if(FORTRAN_LIB_DIR)
+    # Link the Intel Fortran runtime only for components that carry Fortran
+    # (LAPACK/DA); FORTRAN_LIB_DIR is still discovered above for the OpenMP lib.
+    if(FORTRAN_LIB_DIR AND (ENABLE_AOCL_LAPACK OR ENABLE_AOCL_DA))
         list(APPEND _AOCL_PLATFORM_SYSLIBS
             "${FORTRAN_LIB_DIR}/libifcoremd.lib" "${FORTRAN_LIB_DIR}/libircmd.lib"
             "${FORTRAN_LIB_DIR}/svml_dispmd.lib" "${FORTRAN_LIB_DIR}/ifmodintr.lib"
@@ -168,8 +170,12 @@ elseif(WIN32)
         list(APPEND _AOCL_PLATFORM_SYSLIBS "${OPENSSL_CRYPTO_LIB}")
     endif()
 else()
-    # Standalone fallback (POSIX): classic GCC runtime + optional OpenSSL.
-    list(APPEND _AOCL_PLATFORM_SYSLIBS gfortran quadmath)
+    # gfortran/quadmath only for components that carry Fortran (LAPACK f2c, DA
+    # solvers); hardcoding it for a Fortran-free build (e.g. LibM-only) breaks
+    # toolchains with no gfortran (ld: cannot find -lgfortran).
+    if(ENABLE_AOCL_LAPACK OR ENABLE_AOCL_DA)
+        list(APPEND _AOCL_PLATFORM_SYSLIBS gfortran quadmath)
+    endif()
     if(ENABLE_AOCL_CRYPTO)
         list(APPEND _AOCL_PLATFORM_SYSLIBS crypto ssl)
     endif()
