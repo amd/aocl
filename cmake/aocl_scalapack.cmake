@@ -110,11 +110,29 @@ if(ENABLE_AOCL_SCALAPACK)
     # through as '|' and restore it with LIST_SEPARATOR below.
     string(REPLACE ";" "|" _sl_blas_arg "${_sl_blas}")
 
-    # Forward the Fortran compiler the main build already resolved (Windows:
-    # ifx/ifort). On Linux ScaLAPACK finds gfortran itself if this is empty.
+    # Compilers for ScaLAPACK. On non-Windows it overwrites CMAKE_C/Fortran_COMPILER
+    # with the MPI wrappers it locates; handing it a different compiler would change
+    # the compiler mid-configure, resetting the cache and dropping our
+    # -DLAPACK_LIBRARIES/-DBLAS_LIBRARIES (it then downloads reference BLAS/LAPACK).
+    # Pass the wrappers up front so that override is a no-op (they honour I_MPI_CC/
+    # I_MPI_F90 for the underlying compiler). Windows keeps native compilers + MPI
+    # import libs, so pass what the main build resolved.
+    set(_sl_cc "${CMAKE_C_COMPILER}")
+    set(_sl_fc "${CMAKE_Fortran_COMPILER}")
+    if(NOT WIN32)
+        find_program(AOCL_TB_SL_MPICC NAMES mpicc          HINTS "${MPI_BASE_DIR}/bin")
+        find_program(AOCL_TB_SL_MPIFC NAMES mpif90 mpifort HINTS "${MPI_BASE_DIR}/bin")
+        if(AOCL_TB_SL_MPICC)
+            set(_sl_cc "${AOCL_TB_SL_MPICC}")
+        endif()
+        if(AOCL_TB_SL_MPIFC)
+            set(_sl_fc "${AOCL_TB_SL_MPIFC}")
+        endif()
+    endif()
+
     set(_sl_extra_args "")
-    if(CMAKE_Fortran_COMPILER)
-        list(APPEND _sl_extra_args "-DCMAKE_Fortran_COMPILER=${CMAKE_Fortran_COMPILER}")
+    if(_sl_fc)
+        list(APPEND _sl_extra_args "-DCMAKE_Fortran_COMPILER=${_sl_fc}")
     endif()
     if(SCALAPACK_CDEFS)
         list(APPEND _sl_extra_args "-DCDEFS=${SCALAPACK_CDEFS}")
@@ -136,7 +154,7 @@ if(ENABLE_AOCL_SCALAPACK)
             -DLAPACK_LIBRARIES=${_sl_unified}
             -DBLAS_LIBRARIES=${_sl_blas_arg}
             -DMPI_BASE_DIR=${MPI_BASE_DIR}
-            -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+            -DCMAKE_C_COMPILER=${_sl_cc}
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON
             # AOCL-BIY ships only libscalapack, not ScaLAPACK's test suite. Skipping
             # the tests is faster and avoids a Ninja/ifx Fortran .mod name collision
@@ -180,5 +198,7 @@ if(ENABLE_AOCL_SCALAPACK)
     unset(_sl_path)
     unset(_sl_unified)
     unset(_sl_extra_args)
+    unset(_sl_cc)
+    unset(_sl_fc)
     unset(_sl_install)
 endif()

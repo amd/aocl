@@ -64,6 +64,20 @@ if(ENABLE_AOCL_BLAS)
     block()
         # Static PIC archive only -- its objects feed libaocl (and /MT on Windows).
         set(BUILD_SHARED_LIBS OFF)
+        # Pre-map CMAKE_BUILD_TYPE onto BLIS's ENABLE_DEBUG and clear it so BLIS
+        # skips its own (warning-emitting) mapping. Unknown types left to BLIS.
+        if(NOT MSVC AND CMAKE_BUILD_TYPE)
+            if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+                set(ENABLE_DEBUG "noopt")
+                set(CMAKE_BUILD_TYPE "")
+            elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+                set(ENABLE_DEBUG "off")
+                set(CMAKE_BUILD_TYPE "")
+            elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+                set(ENABLE_DEBUG "opt")
+                set(CMAKE_BUILD_TYPE "")
+            endif()
+        endif()
         set(BLIS_CONFIG_FAMILY        "${BLIS_CONFIG_FAMILY}"        CACHE STRING "" FORCE)
         set(ENABLE_CBLAS              ${ENABLE_CBLAS}                CACHE BOOL   "" FORCE)
         set(ENABLE_ADDON             "${ENABLE_ADDON}"              CACHE STRING "" FORCE)
@@ -71,7 +85,9 @@ if(ENABLE_AOCL_BLAS)
         set(BLAS_INT_SIZE            "${BLAS_INT_SIZE}"             CACHE STRING "" FORCE)
         set(COMPLEX_RETURN          "${COMPLEX_RETURN}"            CACHE STRING "" FORCE)
         set(ENABLE_TRSM_PREINVERSION ${ENABLE_TRSM_PREINVERSION}    CACHE BOOL   "" FORCE)
-        set(ENABLE_AOCL_DTL         "${_blas_dtl}"                 CACHE STRING "" FORCE)
+        # Normal var (not cache FORCE): shares the user-facing ENABLE_AOCL_DTL cache
+        # name, so FORCE would clobber it. CMP0126 NEW (BLIS >= 3.22) honours it.
+        set(ENABLE_AOCL_DTL         "${_blas_dtl}")
         set(BUILD_STATIC_LIBS        ON                            CACHE BOOL   "" FORCE)
         # Build BLIS with -fvisibility=default so the netlib BLAS/CBLAS symbols
         # (dgemm_, cblas_dgemm, ...) stay exported when merged into libaocl.so.

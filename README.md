@@ -451,27 +451,28 @@ DTL is controlled at **configure time** with two knobs:
 
   ``` bash
   # Linux
-  $ cmake --preset aocl-linux-make-lp-ga-gcc-config -DAOCL_DTL=on --fresh
+  $ cmake --preset aocl-linux-make-lp-ga-gcc-config -DENABLE_AOCL_DTL=on --fresh
   ```
 
   ``` bat
   :: Windows
-  $ cmake --preset aocl-win-msvc-lp-ga-config -DAOCL_DTL=on --fresh
+  $ cmake --preset aocl-win-msvc-lp-ga-config -DENABLE_AOCL_DTL=on --fresh
   ```
 
-  `-DAOCL_DTL` accepts `off` (default), `on`/`all` (both the API trace and the
-  input log), `trace` (trace stream only) or `log` (input logging only).
+  `-DENABLE_AOCL_DTL` accepts `off` (default), `on`/`all` (both the API trace and
+  the input log), `trace` (trace stream only) or `log` (input logging only). The
+  values are case-insensitive (for example `ALL`, `Trace` and `off` are all valid).
 
 - **Per-component override** -- enable, disable or pick a DTL sub-mode for a
   single component, independent of the global default, with
-  `-DAOCL_<COMPONENT>_DTL=<value>` where `<value>` is `inherit` (default --
-  follow `AOCL_DTL`), `off`, `on`/`all`, `trace` or `log`. `<COMPONENT>` is
+  `-DENABLE_AOCL_<COMPONENT>_DTL=<value>` where `<value>` is `inherit` (default --
+  follow `ENABLE_AOCL_DTL`), `off`, `on`/`all`, `trace` or `log`. `<COMPONENT>` is
   `BLAS` or `LAPACK`. For example, to keep DTL off globally but capture only the
   input log for AOCL-LAPACK and full trace+log for AOCL-BLAS:
 
   ``` bash
   $ cmake --preset aocl-linux-make-lp-ga-gcc-config \
-      -DAOCL_BLAS_DTL=all -DAOCL_LAPACK_DTL=log --fresh
+      -DENABLE_AOCL_BLAS_DTL=all -DENABLE_AOCL_LAPACK_DTL=log --fresh
   ```
 
 See also
@@ -713,8 +714,8 @@ see [Enabling Debug and Trace Logging (DTL)](#enabling-debug-and-trace-logging-d
 
 | CMake Variable or Option  | Usage |
 |---------------------------|---------------------------------------------------------------|
-| **AOCL_DTL**              | `-DAOCL_DTL=off` (default) enables no logging. `on` or `all` enable both the API trace and the input log; `trace` enables only the trace stream; `log` enables only input logging. Only AOCL-BLAS and AOCL-LAPACK are wired for DTL; other components are unaffected. |
-| **AOCL_&lt;COMPONENT&gt;_DTL** | `-DAOCL_<COMPONENT>_DTL=inherit` (default -- follow `AOCL_DTL`), `off`, `on`/`all`, `trace`, or `log` to override the DTL mode for a single component. `<COMPONENT>` is `BLAS` or `LAPACK` (for example `-DAOCL_BLAS_DTL=trace`). |
+| **ENABLE_AOCL_DTL**              | `-DENABLE_AOCL_DTL=off` (default) enables no logging. `on` or `all` enable both the API trace and the input log; `trace` enables only the trace stream; `log` enables only input logging. Values are case-insensitive (`ALL`, `Trace`, `off`, ...). Only AOCL-BLAS and AOCL-LAPACK are wired for DTL; other components are unaffected. |
+| **ENABLE_AOCL_&lt;COMPONENT&gt;_DTL** | `-DENABLE_AOCL_<COMPONENT>_DTL=inherit` (default -- follow `ENABLE_AOCL_DTL`), `off`, `on`/`all`, `trace`, or `log` to override the DTL mode for a single component. Values are case-insensitive. `<COMPONENT>` is `BLAS` or `LAPACK` (for example `-DENABLE_AOCL_BLAS_DTL=trace`). |
 
 ### Passing Library-Specific CMake Options
 

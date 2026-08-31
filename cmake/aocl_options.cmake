@@ -59,14 +59,17 @@ set(AOCL_ARCH "auto" CACHE STRING "Target architecture: auto|zen2|zen3|zen4|zen5
 set_property(CACHE AOCL_ARCH PROPERTY STRINGS auto zen2 zen3 zen4 zen5 zen6 amdzen native)
 
 # DTL logging mode (AOCL-BLAS/LAPACK): off|on|all(trace+log)|trace|log.
-set(AOCL_DTL "off" CACHE STRING "Global DTL (debug/trace logging) default: off|on|all|trace|log")
-set_property(CACHE AOCL_DTL PROPERTY STRINGS off on all trace log)
+set(ENABLE_AOCL_DTL "off" CACHE STRING "Global DTL (debug/trace logging) default: off|on|all|trace|log")
+set_property(CACHE ENABLE_AOCL_DTL PROPERTY STRINGS off on all trace log)
+# Values are case-insensitive (e.g. ALL/TRACE/OFF): normalise to lower case.
+string(TOLOWER "${ENABLE_AOCL_DTL}" _aocl_dtl_lc)
+set(ENABLE_AOCL_DTL "${_aocl_dtl_lc}" CACHE STRING "Global DTL (debug/trace logging) default: off|on|all|trace|log" FORCE)
 
 _aocl_validate_enum(AOCL_LINKAGE    auto shared static)
 _aocl_validate_enum(AOCL_MT_RUNTIME auto serial pthread openmp gomp libomp iomp)
 _aocl_validate_enum(AOCL_INT_SIZE   auto lp64 ilp64)
 _aocl_validate_enum(AOCL_ARCH       auto zen2 zen3 zen4 zen5 zen6 amdzen native)
-_aocl_validate_enum(AOCL_DTL        off on all trace log)
+_aocl_validate_enum(ENABLE_AOCL_DTL off on all trace log)
 
 # ---------------------------------------------------------------------------
 # Bridge: explicit new option DRIVES the legacy variable; "auto" leaves the
@@ -174,12 +177,16 @@ foreach(_C IN LISTS AOCL_COMPONENTS)
         "Threading for ${_C}: inherit|mt|st (mt uses the global AOCL_MT_RUNTIME)")
     set_property(CACHE AOCL_${_C}_THREADING PROPERTY STRINGS inherit mt st)
 
-    set(AOCL_${_C}_DTL "inherit" CACHE STRING
+    set(ENABLE_AOCL_${_C}_DTL "inherit" CACHE STRING
         "DTL logging for ${_C}: inherit|off|on|all|trace|log")
-    set_property(CACHE AOCL_${_C}_DTL PROPERTY STRINGS inherit off on all trace log)
+    set_property(CACHE ENABLE_AOCL_${_C}_DTL PROPERTY STRINGS inherit off on all trace log)
+    # Values are case-insensitive (e.g. ALL/TRACE/OFF): normalise to lower case.
+    string(TOLOWER "${ENABLE_AOCL_${_C}_DTL}" _c_dtl_lc)
+    set(ENABLE_AOCL_${_C}_DTL "${_c_dtl_lc}" CACHE STRING
+        "DTL logging for ${_C}: inherit|off|on|all|trace|log" FORCE)
 
     _aocl_validate_enum(AOCL_${_C}_THREADING inherit mt st)
-    _aocl_validate_enum(AOCL_${_C}_DTL       inherit off on all trace log)
+    _aocl_validate_enum(ENABLE_AOCL_${_C}_DTL inherit off on all trace log)
 
     # A component cannot be MT when there is no global threading runtime.
     if(AOCL_${_C}_THREADING STREQUAL "mt" AND NOT AOCL_MT_GLOBAL)
@@ -209,12 +216,12 @@ function(aocl_opt_threading COMP outvar)
     set(${outvar} "${_r}" PARENT_SCOPE)
 endfunction()
 
-# Effective DTL mode for a component (override wins over global AOCL_DTL).
+# Effective DTL mode for a component (override wins over global ENABLE_AOCL_DTL).
 function(aocl_opt_dtl COMP outvar)
     string(TOUPPER "${COMP}" _c)
-    set(_v "${AOCL_${_c}_DTL}")
+    set(_v "${ENABLE_AOCL_${_c}_DTL}")
     if(_v STREQUAL "inherit")
-        set(_r "${AOCL_DTL}")
+        set(_r "${ENABLE_AOCL_DTL}")
     else()
         set(_r "${_v}")
     endif()
@@ -272,9 +279,9 @@ message(STATUS "[aocl-options] linkage=${AOCL_LINKAGE_EFFECTIVE}  "
                "threading=${AOCL_MT_RUNTIME_EFFECTIVE}  "
                "int=${AOCL_INT_SIZE_EFFECTIVE}  arch=${AOCL_ARCH_EFFECTIVE}")
 foreach(_C IN LISTS AOCL_COMPONENTS)
-    if(NOT AOCL_${_C}_THREADING STREQUAL "inherit" OR NOT AOCL_${_C}_DTL STREQUAL "inherit")
+    if(NOT AOCL_${_C}_THREADING STREQUAL "inherit" OR NOT ENABLE_AOCL_${_C}_DTL STREQUAL "inherit")
         message(STATUS "[aocl-options]   override ${_C}: "
-                       "threading=${AOCL_${_C}_THREADING} dtl=${AOCL_${_C}_DTL}")
+                       "threading=${AOCL_${_C}_THREADING} dtl=${ENABLE_AOCL_${_C}_DTL}")
     endif()
 endforeach()
 message(STATUS "---------------------------------------------------------------")

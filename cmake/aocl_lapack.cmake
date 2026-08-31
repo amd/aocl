@@ -81,7 +81,11 @@ if(ENABLE_AOCL_LAPACK)
         set(ENABLE_EMBED_AOCLUTILS   OFF                         CACHE BOOL   "" FORCE)
         set(LIBAOCLUTILS_INCLUDE_PATH "${AOCL_TB_UTILS_INCLUDE_DIR}" CACHE STRING "" FORCE)
         set(ENABLE_MULTITHREADING    ${_lapack_mt}               CACHE BOOL   "" FORCE)
-        set(ENABLE_AOCL_DTL         "${_lapack_dtl}"             CACHE STRING "" FORCE)
+        # Feed libflame's own ENABLE_AOCL_DTL as a block-scoped NORMAL var (not a
+        # cache FORCE): the user-facing ENABLE_AOCL_DTL option shares this cache name,
+        # so a FORCE here would clobber it. libflame requires CMake >= 3.26 (CMP0126
+        # NEW), so this normal var is honoured and shadows libflame's cache default.
+        set(ENABLE_AOCL_DTL         "${_lapack_dtl}")
         set(ENABLE_ILP64             ${ENABLE_ILP64}             CACHE BOOL   "" FORCE)
         set(ENABLE_BLAS_EXT_GEMMT    ${ENABLE_BLAS_EXT_GEMMT}    CACHE BOOL   "" FORCE)
         set(ENABLE_TRSM_PREINVERSION ${ENABLE_TRSM_PREINVERSION} CACHE BOOL   "" FORCE)

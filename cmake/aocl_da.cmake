@@ -134,6 +134,10 @@ if(ENABLE_AOCL_DA)
             set(DLP_INCLUDE_DIR "${AOCL_TB_DLP_INCLUDE_DIR}"   CACHE STRING "" FORCE)
         endif()
 
+        # DA's cmake_minimum_required (3.26) predates CMP0144, so find_package(Boost)
+        # ignores the upper-case BOOST_ROOT and emits a dev warning. Opt the sub-build
+        # into CMP0144 NEW so BOOST_ROOT is honoured and the warning goes away.
+        set(CMAKE_POLICY_DEFAULT_CMP0144 NEW)
         set(BOOST_ROOT      "${_da_boost}"     CACHE PATH   "" FORCE)
         # Append DA's CPUID feature defines to the INHERITED flags (block-scoped
         # normal variable, picked up by DA's add_subdirectory and reverted after
