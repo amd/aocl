@@ -298,12 +298,16 @@ function(aocl_tb_add_fortran_runtime)
     foreach(_d IN LISTS CMAKE_Fortran_IMPLICIT_LINK_DIRECTORIES)
         aocl_tb_add_external_libs("-L${_d}")
     endforeach()
+    # --as-needed: keep a DT_NEEDED only for an implicit Fortran runtime lib
+    # that is actually referenced, so unused ones are not left as dead deps.
+    aocl_tb_add_external_libs("-Wl,--as-needed")
     foreach(_l IN LISTS CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES)
         if(_l STREQUAL "flangmain" OR _l STREQUAL "ompstub")
             continue()
         endif()
         aocl_tb_add_external_libs("-l${_l}")
     endforeach()
+    aocl_tb_add_external_libs("-Wl,--no-as-needed")
 endfunction()
 
 # ---------------------------------------------------------------------------
