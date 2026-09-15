@@ -22,8 +22,8 @@
 #   (DEPENDS aocl) -- so the link check resolves dgesv from the real libaocl.
 #
 # EXTERNAL PREREQUISITES (caller-provided)
-#   * MPI  -- ScaLAPACK is an MPI library and FATAL_ERRORs without one. Point at
-#             an install with -DMPI_BASE_DIR=<path> (or have a system MPI on PATH).
+#   * MPI  -- required (FATAL without one); works with ANY implementation by path/option:
+#             Linux -DMPI_BASE_DIR=<root w/ bin wrappers>; Windows add -DMPI_LIBRARY_NAME=<lib>.
 #   * A Fortran compiler (Linux: gfortran; Windows: ifx/ifort).
 #
 # SOURCE (precedence: local path > git clone), like the other components:
@@ -44,6 +44,13 @@ if(ENABLE_AOCL_SCALAPACK)
     # MPI install root (ScaLAPACK requires MPI). Forwarded to ScaLAPACK's own
     # find_package(MPI); leave empty to use a system MPI on the default paths.
     set(MPI_BASE_DIR "" CACHE PATH "MPI installation root for AOCL-ScaLAPACK")
+
+    # Select ANY MPI by path/option: Linux auto-detects mpicc + mpif90/mpifort under
+    # MPI_BASE_DIR/bin (override via MPI_C/Fortran_WRAPPER); Windows/other name the import
+    # lib via MPI_LIBRARY_NAME. Covers Intel MPI, Open MPI, MPICH, MPItrampoline, MS-MPI.
+    set(MPI_LIBRARY_NAME "" CACHE STRING "Base name of the MPI library to link ScaLAPACK against (e.g. mpitrampoline, msmpi, mpi); omit lib prefix + extension. Empty = auto (compiler wrappers / system MPI).")
+    set(MPI_C_WRAPPER "" CACHE STRING "Override the MPI C compiler wrapper name (default: mpicc). Linux only.")
+    set(MPI_Fortran_WRAPPER "" CACHE STRING "Override the MPI Fortran compiler wrapper name (default: mpif90;mpifort). Linux only.")
 
     # ScaLAPACK-specific pass-throughs (mirror ScaLAPACK's own option names).
     set(SCALAPACK_CDEFS "" CACHE STRING "ScaLAPACK Fortran-to-C name mangling: NoChange|UpCase|Add_ (empty = ScaLAPACK default)")
@@ -120,8 +127,18 @@ if(ENABLE_AOCL_SCALAPACK)
     set(_sl_cc "${CMAKE_C_COMPILER}")
     set(_sl_fc "${CMAKE_Fortran_COMPILER}")
     if(NOT WIN32)
-        find_program(AOCL_TB_SL_MPICC NAMES mpicc          HINTS "${MPI_BASE_DIR}/bin")
-        find_program(AOCL_TB_SL_MPIFC NAMES mpif90 mpifort HINTS "${MPI_BASE_DIR}/bin")
+        # Any MPI with compiler wrappers works (Intel MPI/Open MPI/MPICH/MPItrampoline);
+        # names are overridable for MPIs that use different ones.
+        set(_sl_ccw mpicc)
+        set(_sl_fcw mpif90 mpifort)
+        if(MPI_C_WRAPPER)
+            set(_sl_ccw ${MPI_C_WRAPPER})
+        endif()
+        if(MPI_Fortran_WRAPPER)
+            set(_sl_fcw ${MPI_Fortran_WRAPPER})
+        endif()
+        find_program(AOCL_TB_SL_MPICC NAMES ${_sl_ccw} HINTS "${MPI_BASE_DIR}/bin")
+        find_program(AOCL_TB_SL_MPIFC NAMES ${_sl_fcw} HINTS "${MPI_BASE_DIR}/bin")
         if(AOCL_TB_SL_MPICC)
             set(_sl_cc "${AOCL_TB_SL_MPICC}")
         endif()
@@ -136,6 +153,31 @@ if(ENABLE_AOCL_SCALAPACK)
     endif()
     if(SCALAPACK_CDEFS)
         list(APPEND _sl_extra_args "-DCDEFS=${SCALAPACK_CDEFS}")
+    endif()
+
+    # Hand FindMPI a named MPI import lib + headers for any MPI it can't auto-detect
+    # (Windows mechanism; on Linux only if no wrapper found). Bare MPItrampoline SDK auto-set.
+    if(WIN32 AND NOT MPI_LIBRARY_NAME AND MPI_BASE_DIR AND EXISTS "${MPI_BASE_DIR}/lib/mpitrampoline.lib")
+        set(MPI_LIBRARY_NAME "mpitrampoline")
+    endif()
+    if(MPI_LIBRARY_NAME AND (WIN32 OR NOT AOCL_TB_SL_MPICC))
+        if(NOT MPI_BASE_DIR)
+            message(FATAL_ERROR "[aocl] MPI_LIBRARY_NAME='${MPI_LIBRARY_NAME}' requires -DMPI_BASE_DIR=<MPI install root>")
+        endif()
+        find_library(AOCL_TB_SL_MPI_LIB NAMES ${MPI_LIBRARY_NAME}
+            HINTS "${MPI_BASE_DIR}" PATH_SUFFIXES lib lib64 bin NO_DEFAULT_PATH)
+        if(NOT AOCL_TB_SL_MPI_LIB OR NOT EXISTS "${MPI_BASE_DIR}/include/mpi.h")
+            message(FATAL_ERROR "[aocl] MPI_LIBRARY_NAME='${MPI_LIBRARY_NAME}': could not find the library under "
+                                "${MPI_BASE_DIR}/{lib,lib64,bin} or ${MPI_BASE_DIR}/include/mpi.h")
+        endif()
+        list(APPEND _sl_extra_args
+            "-DMPI_C_LIB_NAMES=${MPI_LIBRARY_NAME}"
+            "-DMPI_Fortran_LIB_NAMES=${MPI_LIBRARY_NAME}"
+            "-DMPI_${MPI_LIBRARY_NAME}_LIBRARY=${AOCL_TB_SL_MPI_LIB}"
+            "-DMPI_C_HEADER_DIR=${MPI_BASE_DIR}/include"
+            "-DMPI_Fortran_HEADER_DIR=${MPI_BASE_DIR}/include"
+            "-DMPI_Fortran_F77_HEADER_DIR=${MPI_BASE_DIR}/include")
+        message(STATUS "[aocl] ScaLAPACK MPI: explicit library '${MPI_LIBRARY_NAME}' -> ${AOCL_TB_SL_MPI_LIB}")
     endif()
 
     # Build + install ScaLAPACK at BUILD time, after the unified libaocl exists.

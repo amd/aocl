@@ -361,6 +361,9 @@ if(_aocl_shared AND NOT WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         POSITION_INDEPENDENT_CODE ON
         LINKER_LANGUAGE CXX)
+    # Bind libaocl's internal calls locally so a consumer that interposes a LAPACK/BLAS
+    # symbol (e.g. its own zlange_) can't make an internal LAPACKE_*_work call recurse.
+    target_link_options(${PROJECT_NAME} PRIVATE "LINKER:-Bsymbolic-functions")
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         # Use LLVM's lld for Clang/AOCC: harmless for plain ELF objects and the
         # safer choice across the mixed C/C++/Fortran object set.
