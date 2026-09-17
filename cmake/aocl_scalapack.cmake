@@ -137,8 +137,10 @@ if(ENABLE_AOCL_SCALAPACK)
         if(MPI_Fortran_WRAPPER)
             set(_sl_fcw ${MPI_Fortran_WRAPPER})
         endif()
-        find_program(AOCL_TB_SL_MPICC NAMES ${_sl_ccw} HINTS "${MPI_BASE_DIR}/bin")
-        find_program(AOCL_TB_SL_MPIFC NAMES ${_sl_fcw} HINTS "${MPI_BASE_DIR}/bin")
+        # NO_CACHE: re-evaluate every configure so a changed MPI_BASE_DIR is honored
+        # (a cached hit would silently reuse the previously selected MPI wrapper).
+        find_program(AOCL_TB_SL_MPICC NAMES ${_sl_ccw} HINTS "${MPI_BASE_DIR}/bin" NO_CACHE)
+        find_program(AOCL_TB_SL_MPIFC NAMES ${_sl_fcw} HINTS "${MPI_BASE_DIR}/bin" NO_CACHE)
         if(AOCL_TB_SL_MPICC)
             set(_sl_cc "${AOCL_TB_SL_MPICC}")
         endif()
@@ -164,8 +166,11 @@ if(ENABLE_AOCL_SCALAPACK)
         if(NOT MPI_BASE_DIR)
             message(FATAL_ERROR "[aocl] MPI_LIBRARY_NAME='${MPI_LIBRARY_NAME}' requires -DMPI_BASE_DIR=<MPI install root>")
         endif()
+        # NO_CACHE: re-evaluate every configure so a changed MPI_BASE_DIR /
+        # MPI_LIBRARY_NAME is honored (a cached hit would silently reuse the
+        # previously selected MPI import library).
         find_library(AOCL_TB_SL_MPI_LIB NAMES ${MPI_LIBRARY_NAME}
-            HINTS "${MPI_BASE_DIR}" PATH_SUFFIXES lib lib64 bin NO_DEFAULT_PATH)
+            HINTS "${MPI_BASE_DIR}" PATH_SUFFIXES lib lib64 bin NO_DEFAULT_PATH NO_CACHE)
         if(NOT AOCL_TB_SL_MPI_LIB OR NOT EXISTS "${MPI_BASE_DIR}/include/mpi.h")
             message(FATAL_ERROR "[aocl] MPI_LIBRARY_NAME='${MPI_LIBRARY_NAME}': could not find the library under "
                                 "${MPI_BASE_DIR}/{lib,lib64,bin} or ${MPI_BASE_DIR}/include/mpi.h")

@@ -461,6 +461,22 @@ function(_aocl_add_mix_libraries _name)
         "${_lib_dir}/${_aocl_lib_base}"
         ${_AOCL_PLATFORM_SYSLIBS}
     )
+
+    # AOCC (AMD clang/flang) auto-vectorizes AOCL-DA's transcendentals to AMD
+    # LibM vector symbols (amd_vr*_exp / amd_vr*_tanhf, ...). When AOCL-DA is
+    # built but AOCL-LibM is disabled, those symbols are absent from the
+    # aggregate library, so the strict Fortran link of mix_libraries fails with
+    # undefined amd_vr*. Link AMD LibM (-lamdlibm, shipped with AOCC) to resolve
+    # them. Restricted to Linux + AOCC (the only toolchain that emits amd_vr*).
+    if(UNIX AND ENABLE_AOCL_DA AND NOT ENABLE_AOCL_LIBM
+       AND CMAKE_C_COMPILER_ID MATCHES "Clang")
+        execute_process(COMMAND "${CMAKE_C_COMPILER}" --version
+            OUTPUT_VARIABLE _mix_cc_banner ERROR_VARIABLE _mix_cc_banner
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+        if(_mix_cc_banner MATCHES "AOCC")
+            target_link_libraries(${_name} PRIVATE amdlibm)
+        endif()
+    endif()
     set(_mix_rpath "${_lib_dir}")
     if(UNIX AND _AOCL_GCC_RUNTIME_RPATH)
         list(APPEND _mix_rpath "${_AOCL_GCC_RUNTIME_RPATH}")
