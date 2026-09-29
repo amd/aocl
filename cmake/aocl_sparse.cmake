@@ -39,7 +39,7 @@ if(ENABLE_AOCL_SPARSE)
     # Source selection (precedence: local path > git clone).
     set(SPARSE_PATH "" CACHE STRING "Local path of AOCL-Sparse source (parent dir containing 'aocl-sparse'); overrides the git-clone default")
     set(SPARSE_GIT_REPOSITORY "https://github.com/amd/aocl-sparse.git" CACHE STRING "AOCL-Sparse git repository (used when SPARSE_PATH is empty)")
-    set(SPARSE_GIT_TAG "master" CACHE STRING "AOCL-Sparse git branch/tag")
+    set(SPARSE_GIT_TAG "AOCL-20260901" CACHE STRING "AOCL-Sparse git branch/tag")
 
     # Per-component threading (inherit => identical to the global value).
     aocl_resolve_component(SPARSE)

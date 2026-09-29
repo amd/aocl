@@ -32,7 +32,7 @@ if(ENABLE_AOCL_LIBMEM)
     # Source selection (precedence: local path > git clone).
     set(LIBMEM_PATH "" CACHE STRING "Local path of AOCL-LibMem source (parent dir containing 'aocl-libmem'); overrides the git-clone default")
     set(LIBMEM_GIT_REPOSITORY "https://github.com/amd/aocl-libmem.git" CACHE STRING "AOCL-LibMem git repository (used when LIBMEM_PATH is empty)")
-    set(LIBMEM_GIT_TAG "main" CACHE STRING "AOCL-LibMem git branch/tag")
+    set(LIBMEM_GIT_TAG "AOCL-20260901" CACHE STRING "AOCL-LibMem git branch/tag")
 
     block()
         # Static PIC archive for the merge. LibMem builds both shared and static

@@ -41,7 +41,7 @@ if(ENABLE_AOCL_DA)
     # Source selection (precedence: local path > git clone).
     set(DA_PATH "" CACHE STRING "Local path of AOCL-DA source (parent dir containing 'aocl-data-analytics'); overrides the git-clone default")
     set(DA_GIT_REPOSITORY "https://github.com/amd/aocl-data-analytics.git" CACHE STRING "AOCL-DA git repository (used when DA_PATH is empty)")
-    set(DA_GIT_TAG "main" CACHE STRING "AOCL-DA git branch/tag")
+    set(DA_GIT_TAG "AOCL-20260901" CACHE STRING "AOCL-DA git branch/tag")
 
     # Boost (header-only, >=1.66). Honour an existing BOOST_ROOT, otherwise fall
     # back to the in-repo local copy.

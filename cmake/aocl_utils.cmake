@@ -37,7 +37,7 @@ if(ENABLE_AOCL_UTILS)
     # Source selection (precedence: local path > git clone).
     set(UTILS_PATH "" CACHE STRING "Local path of AOCL-Utils source (parent dir containing 'aocl-utils'); overrides the git-clone default")
     set(UTILS_GIT_REPOSITORY "https://github.com/amd/aocl-utils.git" CACHE STRING "AOCL-Utils git repository (used when UTILS_PATH is empty)")
-    set(UTILS_GIT_TAG "main" CACHE STRING "AOCL-Utils git branch/tag")
+    set(UTILS_GIT_TAG "AOCL-20260901" CACHE STRING "AOCL-Utils git branch/tag")
 
     # Bring AOCL-Utils into this build in an isolated option scope. block()
     # confines the forced cache/option settings; the created targets remain

@@ -884,31 +884,31 @@ the repository and branch/tag for the AOCL stable public release.
 | CMake Variable or Option    | Default Value                                      | Usage |
 |-----------------------------|----------------------------------------------------|-----------------------------------------------------------|
 | **UTILS_GIT_REPOSITORY**    | <https://github.com/amd/aocl-utils.git>            | `-DUTILS_GIT_REPOSITORY=<AOCL-Utils Repository URL>` |
-| **UTILS_GIT_TAG**           | `main`                                             | `-DUTILS_GIT_TAG=<AOCL-Utils Git Tag or Branch Name>` |
+| **UTILS_GIT_TAG**           | `AOCL-20260901`                                             | `-DUTILS_GIT_TAG=<AOCL-Utils Git Tag or Branch Name>` |
 | **BLAS_GIT_REPOSITORY**     | <https://github.com/amd/blis.git>                  | `-DBLAS_GIT_REPOSITORY=<AOCL-BLAS Repository URL>` |
-| **BLAS_GIT_TAG**            | `master`                                           | `-DBLAS_GIT_TAG=<AOCL-BLAS Git Tag or Branch Name>` |
+| **BLAS_GIT_TAG**            | `AOCL-20260901`                                           | `-DBLAS_GIT_TAG=<AOCL-BLAS Git Tag or Branch Name>` |
 | **LAPACK_GIT_REPOSITORY**   | <https://github.com/amd/libflame.git>              | `-DLAPACK_GIT_REPOSITORY=<AOCL-LAPACK Repository URL>` |
-| **LAPACK_GIT_TAG**          | `master`                                           | `-DLAPACK_GIT_TAG=<AOCL-LAPACK Git Tag or Branch Name>` |
+| **LAPACK_GIT_TAG**          | `AOCL-20260901`                                           | `-DLAPACK_GIT_TAG=<AOCL-LAPACK Git Tag or Branch Name>` |
 | **SPARSE_GIT_REPOSITORY**   | <https://github.com/amd/aocl-sparse.git>           | `-DSPARSE_GIT_REPOSITORY=<AOCL-Sparse Repository URL>` |
-| **SPARSE_GIT_TAG**          | `master`                                           | `-DSPARSE_GIT_TAG=<AOCL-Sparse Git Tag or Branch Name>` |
+| **SPARSE_GIT_TAG**          | `AOCL-20260901`                                           | `-DSPARSE_GIT_TAG=<AOCL-Sparse Git Tag or Branch Name>` |
 | **CRYPTO_GIT_REPOSITORY**   | <https://github.com/amd/aocl-crypto.git>           | `-DCRYPTO_GIT_REPOSITORY=<AOCL-Cryptography Repository URL>` |
-| **CRYPTO_GIT_TAG**          | `main`                                             | `-DCRYPTO_GIT_TAG=<AOCL-Cryptography Git Tag or Branch Name>` |
+| **CRYPTO_GIT_TAG**          | `AOCL-20260901`                                             | `-DCRYPTO_GIT_TAG=<AOCL-Cryptography Git Tag or Branch Name>` |
 | **LIBM_GIT_REPOSITORY**     | <https://github.com/amd/aocl-libm-ose.git>         | `-DLIBM_GIT_REPOSITORY=<AOCL-LibM Repository URL>` |
-| **LIBM_GIT_TAG**            | `master`                                           | `-DLIBM_GIT_TAG=<AOCL-LibM Git Tag or Branch Name>` |
+| **LIBM_GIT_TAG**            | `AOCL-20260901`                                           | `-DLIBM_GIT_TAG=<AOCL-LibM Git Tag or Branch Name>` |
 | **COMPRESSION_GIT_REPOSITORY** | <https://github.com/amd/aocl-compression.git>   | `-DCOMPRESSION_GIT_REPOSITORY=<AOCL-Compression Repository URL>` |
-| **COMPRESSION_GIT_TAG**     | `amd-main`                                         | `-DCOMPRESSION_GIT_TAG=<AOCL-Compression Git Tag or Branch Name>` |
+| **COMPRESSION_GIT_TAG**     | `AOCL-20260901`                                         | `-DCOMPRESSION_GIT_TAG=<AOCL-Compression Git Tag or Branch Name>` |
 | **DA_GIT_REPOSITORY**       | <https://github.com/amd/aocl-data-analytics.git>   | `-DDA_GIT_REPOSITORY=<AOCL-Data-Analytics Repository URL>` |
-| **DA_GIT_TAG**              | `main`                                             | `-DDA_GIT_TAG=<AOCL-Data-Analytics Git Tag or Branch Name>` |
+| **DA_GIT_TAG**              | `AOCL-20260901`                                             | `-DDA_GIT_TAG=<AOCL-Data-Analytics Git Tag or Branch Name>` |
 | **LIBMEM_GIT_REPOSITORY**   | <https://github.com/amd/aocl-libmem.git>           | `-DLIBMEM_GIT_REPOSITORY=<AOCL-LibMem Repository URL>` |
-| **LIBMEM_GIT_TAG**          | `main`                                             | `-DLIBMEM_GIT_TAG=<AOCL-LibMem Git Tag or Branch Name>` |
+| **LIBMEM_GIT_TAG**          | `AOCL-20260901`                                             | `-DLIBMEM_GIT_TAG=<AOCL-LibMem Git Tag or Branch Name>` |
 | **FFTZ_GIT_REPOSITORY**     | <https://github.com/amd/aocl-fftz.git>             | `-DFFTZ_GIT_REPOSITORY=<AOCL-FFTZ Repository URL>` |
-| **FFTZ_GIT_TAG**            | `amd-main`                                         | `-DFFTZ_GIT_TAG=<AOCL-FFTZ Git Tag or Branch Name>` |
+| **FFTZ_GIT_TAG**            | `AOCL-20260901`                                         | `-DFFTZ_GIT_TAG=<AOCL-FFTZ Git Tag or Branch Name>` |
 | **OPENRNG_GIT_REPOSITORY**  | <https://github.com/amd/openrng.git>               | `-DOPENRNG_GIT_REPOSITORY=<AOCL-OpenRNG Repository URL>` |
-| **OPENRNG_GIT_TAG**         | `main`                                             | `-DOPENRNG_GIT_TAG=<AOCL-OpenRNG Git Tag or Branch Name>` |
+| **OPENRNG_GIT_TAG**         | `5.3.2`                                             | `-DOPENRNG_GIT_TAG=<AOCL-OpenRNG Git Tag or Branch Name>` |
 | **DLP_GIT_REPOSITORY**      | <https://github.com/amd/aocl-dlp.git>              | `-DDLP_GIT_REPOSITORY=<AOCL-DLP Repository URL>` |
-| **DLP_GIT_TAG**             | `master`                                           | `-DDLP_GIT_TAG=<AOCL-DLP Git Tag or Branch Name>` |
+| **DLP_GIT_TAG**             | `AOCL-20260901`                                           | `-DDLP_GIT_TAG=<AOCL-DLP Git Tag or Branch Name>` |
 | **SCALAPACK_GIT_REPOSITORY**| <https://github.com/amd/aocl-scalapack.git>        | `-DSCALAPACK_GIT_REPOSITORY=<AOCL-ScaLAPACK Repository URL>` (only when `ENABLE_AOCL_SCALAPACK=ON`) |
-| **SCALAPACK_GIT_TAG**       | `master`                                           | `-DSCALAPACK_GIT_TAG=<AOCL-ScaLAPACK Git Tag or Branch Name>` |
+| **SCALAPACK_GIT_TAG**       | `AOCL-20260901`                                           | `-DSCALAPACK_GIT_TAG=<AOCL-ScaLAPACK Git Tag or Branch Name>` |
 
 ## Build Troubleshooting
 
