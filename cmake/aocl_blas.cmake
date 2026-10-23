@@ -46,7 +46,7 @@ if(ENABLE_AOCL_BLAS)
     # Source selection (precedence: local path > git clone).
     set(BLAS_PATH "" CACHE STRING "Local path of AOCL-BLAS source (parent dir containing 'blis'); overrides the git-clone default")
     set(BLAS_GIT_REPOSITORY "https://github.com/amd/blis.git" CACHE STRING "AOCL-BLAS (BLIS) git repository (used when BLAS_PATH is empty)")
-    set(BLAS_GIT_TAG "AOCL-20260901" CACHE STRING "AOCL-BLAS (BLIS) git branch/tag")
+    set(BLAS_GIT_TAG "AOCL-20261001" CACHE STRING "AOCL-BLAS (BLIS) git branch/tag")
 
     # Per-component threading / DTL (inherit => identical to the global values).
     aocl_resolve_component(BLAS)

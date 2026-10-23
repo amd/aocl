@@ -30,7 +30,7 @@ if(ENABLE_AOCL_FFTZ)
     # Source selection (precedence: local path > git clone).
     set(FFTZ_PATH "" CACHE STRING "Local path of AOCL-FFTZ source (parent dir containing 'aocl-fftz'); overrides the git-clone default")
     set(FFTZ_GIT_REPOSITORY "https://github.com/amd/aocl-fftz.git" CACHE STRING "AOCL-FFTZ git repository (used when FFTZ_PATH is empty)")
-    set(FFTZ_GIT_TAG "AOCL-20260901" CACHE STRING "AOCL-FFTZ git branch/tag")
+    set(FFTZ_GIT_TAG "AOCL-20261001" CACHE STRING "AOCL-FFTZ git branch/tag")
 
     # Per-component threading (inherit => identical to the global value).
     aocl_resolve_component(FFTZ)
