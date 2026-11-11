@@ -33,7 +33,7 @@ if(ENABLE_AOCL_OPENRNG)
     # Source selection (precedence: local path > git clone).
     set(OPENRNG_PATH "" CACHE STRING "Local path of OpenRNG source (parent dir containing 'openrng'); overrides the git-clone default")
     set(OPENRNG_GIT_REPOSITORY "https://github.com/amd/openrng.git" CACHE STRING "OpenRNG git repository (used when OPENRNG_PATH is empty)")
-    set(OPENRNG_GIT_TAG "5.3.2" CACHE STRING "OpenRNG git branch/tag")
+    set(OPENRNG_GIT_TAG "6.0.0" CACHE STRING "OpenRNG git branch/tag")
 
     if(ENABLE_ILP64)
         set(_orng_iface "ilp64")

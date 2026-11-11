@@ -83,7 +83,7 @@ if(ENABLE_AOCL_CRYPTO)
     # Source selection (precedence: local path > git clone).
     set(CRYPTO_PATH "" CACHE STRING "Local path of AOCL-Crypto source (parent dir containing 'aocl-crypto'); overrides the git-clone default")
     set(CRYPTO_GIT_REPOSITORY "https://github.com/amd/aocl-crypto.git" CACHE STRING "AOCL-Crypto git repository (used when CRYPTO_PATH is empty)")
-    set(CRYPTO_GIT_TAG "AOCL-20260901" CACHE STRING "AOCL-Crypto git branch/tag")
+    set(CRYPTO_GIT_TAG "6.0.0" CACHE STRING "AOCL-Crypto git branch/tag")
 
     # Per-component DTL (ALCP exposes ALCP_ENABLE_DEBUG_LOGGING).
     aocl_resolve_component(CRYPTO)

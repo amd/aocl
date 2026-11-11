@@ -36,7 +36,7 @@ if(ENABLE_AOCL_COMPRESSION)
     # Source selection (precedence: local path > git clone).
     set(COMPRESSION_PATH "" CACHE STRING "Local path of AOCL-Compression source (parent dir containing 'aocl-compression'); overrides the git-clone default")
     set(COMPRESSION_GIT_REPOSITORY "https://github.com/amd/aocl-compression.git" CACHE STRING "AOCL-Compression git repository (used when COMPRESSION_PATH is empty)")
-    set(COMPRESSION_GIT_TAG "AOCL-20260901" CACHE STRING "AOCL-Compression git branch/tag")
+    set(COMPRESSION_GIT_TAG "6.0.0" CACHE STRING "AOCL-Compression git branch/tag")
 
     # Per-component threading (inherit => identical to the global value).
     aocl_resolve_component(COMPRESSION)

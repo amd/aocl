@@ -46,7 +46,7 @@ if(ENABLE_AOCL_LAPACK)
     # Source selection (precedence: local path > git clone).
     set(LAPACK_PATH "" CACHE STRING "Local path of AOCL-LAPACK source (parent dir containing 'libflame'); overrides the git-clone default")
     set(LAPACK_GIT_REPOSITORY "https://github.com/amd/libflame.git" CACHE STRING "AOCL-LAPACK (libflame) git repository (used when LAPACK_PATH is empty)")
-    set(LAPACK_GIT_TAG "AOCL-20260901" CACHE STRING "AOCL-LAPACK (libflame) git branch/tag")
+    set(LAPACK_GIT_TAG "6.0.0" CACHE STRING "AOCL-LAPACK (libflame) git branch/tag")
 
     # Per-component threading / DTL (inherit => identical to the global values).
     aocl_resolve_component(LAPACK)

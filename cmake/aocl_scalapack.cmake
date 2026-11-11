@@ -39,7 +39,7 @@ if(ENABLE_AOCL_SCALAPACK)
     # amd/aocl-scalapack.git @ master.
     set(SCALAPACK_PATH "" CACHE STRING "Local path of AOCL-ScaLAPACK source (parent dir containing 'aocl-scalapack'); overrides the git-clone default")
     set(SCALAPACK_GIT_REPOSITORY "https://github.com/amd/aocl-scalapack.git" CACHE STRING "AOCL-ScaLAPACK git repository (used when SCALAPACK_PATH is empty)")
-    set(SCALAPACK_GIT_TAG "AOCL-20260901" CACHE STRING "AOCL-ScaLAPACK git branch/tag")
+    set(SCALAPACK_GIT_TAG "6.0.0" CACHE STRING "AOCL-ScaLAPACK git branch/tag")
 
     # MPI install root (ScaLAPACK requires MPI). Forwarded to ScaLAPACK's own
     # find_package(MPI); leave empty to use a system MPI on the default paths.

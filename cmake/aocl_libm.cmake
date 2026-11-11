@@ -42,7 +42,7 @@ if(ENABLE_AOCL_LIBM)
     # Source selection (precedence: local path > git clone).
     set(LIBM_PATH "" CACHE STRING "Local path of AOCL-LibM source (parent dir containing 'aocl-libm'); overrides the git-clone default")
     set(LIBM_GIT_REPOSITORY "https://github.com/amd/aocl-libm-ose.git" CACHE STRING "AOCL-LibM git repository (used when LIBM_PATH is empty)")
-    set(LIBM_GIT_TAG "AOCL-20260901" CACHE STRING "AOCL-LibM git branch/tag")
+    set(LIBM_GIT_TAG "6.0.0" CACHE STRING "AOCL-LibM git branch/tag")
 
     block()
         # Static PIC archives only -- their objects feed libaocl (and /MT on Windows).
