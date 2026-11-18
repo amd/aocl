@@ -41,6 +41,9 @@ else()
 endif()
 
 set(AOCL_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}" CACHE PATH "AOCL installation directory")
+include(GNUInstallDirs)
+cmake_path(ABSOLUTE_PATH CMAKE_INSTALL_INCLUDEDIR BASE_DIRECTORY "${AOCL_INSTALL_DIR}" OUTPUT_VARIABLE _inc_dir)
+cmake_path(ABSOLUTE_PATH CMAKE_INSTALL_LIBDIR BASE_DIRECTORY "${AOCL_INSTALL_DIR}" OUTPUT_VARIABLE _lib_dir)
 
 # Unified library base name. Honour the parent's AOCL_SINGLE_LIBRARY_NAME so the
 # tests link/reference exactly the file the unified build produced (aocl.dll/.lib
@@ -293,8 +296,6 @@ function(_aocl_add_test_executable _name _src _is_cpp)
         add_dependencies(${_name} ${AOCL_SINGLE_LIBRARY_NAME})
     endif()
 
-    set(_inc_dir "${AOCL_INSTALL_DIR}/include")
-    set(_lib_dir "${AOCL_INSTALL_DIR}/lib")
 
     target_include_directories(${_name} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -382,14 +383,14 @@ endfunction()
 # C tests : test_aocl_symbols.c
 # -----------------------------------------------------------------------------
 _aocl_add_test_executable(test_symbols test_aocl_symbols.c FALSE)
-_aocl_register_test(test_symbols "${AOCL_INSTALL_DIR}/lib")
+_aocl_register_test(test_symbols "${_lib_dir}")
 
 # -----------------------------------------------------------------------------
 # C++ tests : test_aocl_cpp.cpp  (only when Utils/Crypto/DA enabled)
 # -----------------------------------------------------------------------------
 if(ENABLE_AOCL_UTILS OR ENABLE_AOCL_CRYPTO OR ENABLE_AOCL_DA)
     _aocl_add_test_executable(test_cpp_symbols test_aocl_cpp.cpp TRUE)
-    _aocl_register_test(test_cpp_symbols "${AOCL_INSTALL_DIR}/lib")
+    _aocl_register_test(test_cpp_symbols "${_lib_dir}")
 else()
     message(STATUS "Skipping C++ tests: enable at least one of UTILS / CRYPTO / DA")
 endif()
@@ -403,7 +404,7 @@ endif()
 # -----------------------------------------------------------------------------
 if(ENABLE_AOCL_SPARSE OR ENABLE_AOCL_DA)
     _aocl_add_test_executable(test_cpp_templates test_aocl_cpp_templates.cpp TRUE)
-    _aocl_register_test(test_cpp_templates "${AOCL_INSTALL_DIR}/lib")
+    _aocl_register_test(test_cpp_templates "${_lib_dir}")
 else()
     message(STATUS "Skipping C++ template tests: enable SPARSE or DA")
 endif()
@@ -413,7 +414,6 @@ endif()
 # -----------------------------------------------------------------------------
 # Builds the Fortran BLAS-interop executable from mix_libraries.F90.
 function(_aocl_add_mix_libraries _name)
-    set(_lib_dir "${AOCL_INSTALL_DIR}/lib")
 
     add_executable(${_name} EXCLUDE_FROM_ALL mix_libraries.F90)
     # mix_libraries.F90 uses C-preprocessor #define macros for the BLAS symbol

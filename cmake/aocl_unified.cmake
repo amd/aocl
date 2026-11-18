@@ -294,7 +294,7 @@ if(WIN32)
     set_target_properties(aocl_manifest_obj PROPERTIES
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
-_install(FILES "${_manifest_txt}" DESTINATION lib COMPONENT ${AOCL_INSTALL_COMPONENT})
+_install(FILES "${_manifest_txt}" DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT ${AOCL_INSTALL_COMPONENT})
 
 # --- unified static archive (compile every component object straight in) -----
 # In a static build this IS the deliverable (aocl.lib / libaocl.a). In a shared
@@ -348,7 +348,7 @@ endif()
 if(NOT _aocl_shared OR NOT WIN32)
     _install(TARGETS ${_static_tgt}
             COMPONENT ${AOCL_INSTALL_COMPONENT}
-            ARCHIVE DESTINATION lib)
+            ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 endif()
 
 # --- unified shared libaocl.so (ELF) ----------------------------------------
@@ -386,9 +386,9 @@ if(_aocl_shared AND NOT WIN32)
 
     _install(TARGETS ${PROJECT_NAME}
             COMPONENT ${AOCL_INSTALL_COMPONENT}
-            LIBRARY DESTINATION lib
-            ARCHIVE DESTINATION lib
-            RUNTIME DESTINATION lib)
+            LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+            ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+            RUNTIME DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 endif()
 
 # --- unified aocl.dll (Windows) ---------------------------------------------
@@ -532,8 +532,8 @@ if(_aocl_shared AND WIN32)
 
     _install(TARGETS ${PROJECT_NAME}
             COMPONENT ${AOCL_INSTALL_COMPONENT}
-            RUNTIME DESTINATION lib
-            ARCHIVE DESTINATION lib)
+            RUNTIME DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+            ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 endif()
 
 # --- top-level merged include/ (the union of every component's headers) ------

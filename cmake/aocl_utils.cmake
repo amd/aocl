@@ -53,7 +53,7 @@ if(ENABLE_AOCL_UTILS)
         set(ALCI_EXAMPLES         OFF CACHE BOOL   "" FORCE)
         set(AU_BUILD_SHARED_LIBS  OFF CACHE BOOL   "" FORCE)
         set(AU_BUILD_STATIC_LIBS  ON  CACHE BOOL   "" FORCE)
-        set(CMAKE_INSTALL_LIBDIR  lib CACHE STRING "" FORCE)
+        set(CMAKE_INSTALL_LIBDIR lib)
 
         aocl_tb_declare_source(aocl_utils UTILS aocl-utils)
         FetchContent_MakeAvailable(aocl_utils)

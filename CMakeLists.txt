@@ -32,6 +32,8 @@ elseif((NOT WIN32) AND (CMAKE_INSTALL_PREFIX STREQUAL "/usr/local"))
     set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}" CACHE PATH "Installation directory" FORCE)
 endif()
 
+include(GNUInstallDirs)
+
 # Print the build configurations
 message("CMAKE_CONFIGURATION_TYPES: ${CMAKE_CONFIGURATION_TYPES}")
 message("CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")

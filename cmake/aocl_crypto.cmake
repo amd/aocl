@@ -96,7 +96,7 @@ if(ENABLE_AOCL_CRYPTO)
     block()
         # Static PIC archive only -- its objects feed libaocl (and /MT on Windows).
         set(BUILD_SHARED_LIBS OFF)
-        set(CMAKE_INSTALL_LIBDIR "lib"           CACHE STRING   "" FORCE)
+        set(CMAKE_INSTALL_LIBDIR lib)
         set(ENABLE_AOCL_UTILS    ON              CACHE BOOL     "" FORCE)
         set(OPENSSL_INSTALL_DIR  "${OPENSSL_INSTALL_DIR}" CACHE STRING "" FORCE)
         set(7_ZIP                "${CMAKE_COMMAND}" CACHE FILEPATH "" FORCE)

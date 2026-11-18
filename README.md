@@ -236,6 +236,10 @@ $ cmake -S . -B build -G "Visual Studio 17 2022" -DCMAKE_BUILD_TYPE=Release
 Replace the `-G` generator with the one matching your installed Visual Studio
 version (for example, `Visual Studio 16 2019`).
 
+To customize the unified installation layout, pass `-DCMAKE_INSTALL_LIBDIR=lib/host-math/lib` and
+`-DCMAKE_INSTALL_INCLUDEDIR=lib/host-math/include` during configuration. Relative directories are resolved
+against the install prefix.
+
 ### Build the Unified Binary
 
 Use the following command to build the unified binary:

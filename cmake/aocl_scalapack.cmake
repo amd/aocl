@@ -227,7 +227,7 @@ if(ENABLE_AOCL_SCALAPACK)
     # only the scalapack library files (libaocl itself is never copied here -- we
     # pass a working LAPACK_LIBRARIES, so ScaLAPACK skips its BLAS/LAPACK copy).
     _install(DIRECTORY "${_sl_install}/lib/"
-             DESTINATION "lib"
+             DESTINATION "${CMAKE_INSTALL_LIBDIR}"
              COMPONENT ${AOCL_INSTALL_COMPONENT}
              FILES_MATCHING
                  PATTERN "*scalapack*.a"
@@ -237,7 +237,7 @@ if(ENABLE_AOCL_SCALAPACK)
                  PATTERN "pkgconfig" EXCLUDE)
     if(WIN32)
         _install(DIRECTORY "${_sl_install}/Testing/"
-                 DESTINATION "lib"
+                 DESTINATION "${CMAKE_INSTALL_LIBDIR}"
                  COMPONENT ${AOCL_INSTALL_COMPONENT}
                  FILES_MATCHING PATTERN "*scalapack*.dll")
     endif()

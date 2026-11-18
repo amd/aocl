@@ -490,13 +490,32 @@ if(AOCL_TB_UNIFIED_BUILD)
             # Honour only header installs: DESTINATION under include/, or the
             # GNUInstallDirs shorthand TYPE INCLUDE (e.g. AOCL-Crypto's alcp/).
             cmake_parse_arguments(_AOCL_INST "" "DESTINATION;TYPE" "" ${ARGV})
-            if(_AOCL_INST_DESTINATION MATCHES "(^|/)include($|/)"
-               OR "${_AOCL_INST_TYPE}" STREQUAL "INCLUDE")
-                # Re-emit verbatim (order preserved -- DIRECTORY installs require
-                # DESTINATION before FILES_MATCHING/PATTERN/REGEX). A component's
-                # absolute ${CMAKE_INSTALL_PREFIX}/include resolves to the unified
-                # deliverable prefix (set at configure), so headers land in the
-                # merged include/; a relative include dest honours --prefix.
+            set(_aocl_dest "${_AOCL_INST_DESTINATION}")
+            cmake_path(ABSOLUTE_PATH _aocl_dest BASE_DIRECTORY "${CMAKE_INSTALL_PREFIX}" NORMALIZE)
+            set(_aocl_default_include "${CMAKE_INSTALL_PREFIX}/include")
+            cmake_path(IS_PREFIX _aocl_default_include "${_aocl_dest}" NORMALIZE _aocl_in_default_include)
+            cmake_path(IS_PREFIX CMAKE_INSTALL_FULL_INCLUDEDIR "${_aocl_dest}" NORMALIZE _aocl_in_install_include)
+            if("${_AOCL_INST_TYPE}" STREQUAL "INCLUDE")
+                _install(${ARGV})
+            elseif(_aocl_in_install_include OR _aocl_in_default_include)
+                # Some components hard-code include/<subdir>. Keep that subdirectory
+                # and the order of DIRECTORY filters when relocating their headers.
+                if(_aocl_in_install_include)
+                    set(_aocl_header_root "${CMAKE_INSTALL_FULL_INCLUDEDIR}")
+                else()
+                    set(_aocl_header_root "${_aocl_default_include}")
+                endif()
+                cmake_path(RELATIVE_PATH _aocl_dest BASE_DIRECTORY "${_aocl_header_root}" OUTPUT_VARIABLE _aocl_subdir)
+                cmake_path(APPEND CMAKE_INSTALL_INCLUDEDIR "${_aocl_subdir}" OUTPUT_VARIABLE _aocl_mapped_dest)
+                cmake_path(NORMAL_PATH _aocl_mapped_dest)
+                set(_aocl_install_args ${ARGV})
+                list(FIND _aocl_install_args DESTINATION _aocl_position)
+                math(EXPR _aocl_position "${_aocl_position} + 1")
+                list(REMOVE_AT _aocl_install_args ${_aocl_position})
+                list(INSERT _aocl_install_args ${_aocl_position} "${_aocl_mapped_dest}")
+                _install(${_aocl_install_args})
+            elseif(_AOCL_INST_DESTINATION MATCHES "(^|/)include($|/)")
+                # Retain component-specific header staging outside the unified prefix.
                 _install(${ARGV})
             endif()
         endif()
@@ -648,7 +667,7 @@ function(aocl_tb_install_component COMP_DIR)
                     if(_ph_files)
                         _install(FILES ${_ph_files} DESTINATION "${_pkg}/include"
                                 COMPONENT ${AOCL_INSTALL_COMPONENT})
-                        _install(FILES ${_ph_files} DESTINATION "include"
+                        _install(FILES ${_ph_files} DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
                                 COMPONENT ${AOCL_INSTALL_COMPONENT})
                     endif()
                 endif()
@@ -664,7 +683,7 @@ function(aocl_tb_install_component COMP_DIR)
                     COMPONENT ${AOCL_INSTALL_COMPONENT}
                     FILES_MATCHING REGEX ".*\\.(h|hh|hpp|H)$")
             _install(DIRECTORY "${_hd}/"
-                    DESTINATION "include"
+                    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
                     COMPONENT ${AOCL_INSTALL_COMPONENT}
                     FILES_MATCHING REGEX ".*\\.(h|hh|hpp|H)$")
         endif()
@@ -682,7 +701,7 @@ function(aocl_tb_install_component COMP_DIR)
     if(_tbi_hf)
         _install(FILES ${_tbi_hf} DESTINATION "${_pkg}/include"
                 COMPONENT ${AOCL_INSTALL_COMPONENT})
-        _install(FILES ${_tbi_hf} DESTINATION "include"
+        _install(FILES ${_tbi_hf} DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
                 COMPONENT ${AOCL_INSTALL_COMPONENT})
     endif()
 endfunction()
